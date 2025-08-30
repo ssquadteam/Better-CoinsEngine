@@ -343,7 +343,7 @@ public class CurrencyCommands {
                     redis.requestUserCreation(playerName, redis.getNodeId())
                 );
 
-                plugin.runTaskLater(() -> {
+                plugin.getFoliaScheduler().runLater(() -> {
                     plugin.getUserManager().manageUser(playerName, retryUser -> {
                         if (retryUser == null) {
                             context.errorBadPlayer();

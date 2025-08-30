@@ -584,11 +584,9 @@ public class RedisSyncManager {
         this.plugin.runNextTick(() -> {
             Player player = Bukkit.getPlayerExact(playerName);
             if (player != null) {
-                CoinsUser user = this.plugin.getUserManager().getUserData(player);
-                if (user != null) {
-                    publishUserBalance(user);
-                    this.plugin.info("Sent user data for cross-server request: " + playerName);
-                }
+                CoinsUser user = this.plugin.getUserManager().getOrFetch(player);
+                publishUserBalance(user);
+                this.plugin.info("Sent user data for cross-server request: " + playerName);
             }
         });
     }

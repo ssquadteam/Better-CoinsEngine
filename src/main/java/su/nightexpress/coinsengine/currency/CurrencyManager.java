@@ -326,7 +326,7 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
                     redis.requestUserCreation(name, redis.getNodeId())
                 );
 
-                this.plugin.runTaskLater(() -> {
+                this.plugin.getFoliaScheduler().runLater(() -> {
                     this.plugin.getUserManager().manageUser(name, retryUser -> {
                         if (retryUser == null) {
                             Lang.ERROR_INVALID_PLAYER.getMessage(this.plugin).send(sender);
@@ -393,7 +393,7 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
                     redis.requestUserCreation(name, redis.getNodeId())
                 );
 
-                this.plugin.runTaskLater(() -> {
+                this.plugin.getFoliaScheduler().runLater(() -> {
                     this.plugin.getUserManager().manageUser(name, retryUser -> {
                         if (retryUser == null) {
                             Lang.ERROR_INVALID_PLAYER.getMessage(this.plugin).send(sender);
@@ -468,7 +468,7 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
                     redis.requestUserCreation(targetName, redis.getNodeId())
                 );
 
-                this.plugin.runTaskLater(() -> {
+                this.plugin.getFoliaScheduler().runLater(() -> {
                     this.plugin.getUserManager().manageUser(targetName, retryUser -> {
                         if (retryUser == null) {
                             Lang.ERROR_INVALID_PLAYER.getMessage(this.plugin).send(from);
