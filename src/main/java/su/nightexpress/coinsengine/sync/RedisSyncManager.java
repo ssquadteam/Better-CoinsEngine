@@ -18,7 +18,9 @@ import su.nightexpress.coinsengine.config.Config;
 import su.nightexpress.coinsengine.data.impl.CoinsUser;
 import su.nightexpress.coinsengine.tops.TopEntry;
 
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -40,6 +42,9 @@ public class RedisSyncManager {
 
     private long balanceSyncInterval;
     private long leaderboardSyncInterval;
+
+    // Cross-server player name cache
+    private final Set<String> crossServerPlayerNames = new HashSet<>();
 
     public RedisSyncManager(@NotNull CoinsEnginePlugin plugin) {
         this.plugin = plugin;
@@ -127,6 +132,8 @@ public class RedisSyncManager {
         if (this.leaderboardSyncInterval > 0) {
             this.plugin.getFoliaScheduler().runTimerAsync(this::syncLeaderboards, 0L, this.leaderboardSyncInterval);
         }
+
+        this.plugin.getFoliaScheduler().runTimerAsync(this::syncPlayerNames, 0L, 600L); // 30 seconds
     }
 
     /* =========================
@@ -202,6 +209,39 @@ public class RedisSyncManager {
     }
 
     /**
+     * Publishes payment notification across servers
+     */
+    public void publishPaymentNotification(@NotNull UUID recipientId, @NotNull String senderName,
+                                         @NotNull String currencyId, double amount, double newBalance) {
+        if (!isActive()) return;
+
+        JsonObject data = new JsonObject();
+        data.addProperty("recipientId", recipientId.toString());
+        data.addProperty("senderName", senderName);
+        data.addProperty("currencyId", currencyId);
+        data.addProperty("amount", amount);
+        data.addProperty("newBalance", newBalance);
+        data.addProperty("timestamp", System.currentTimeMillis());
+
+        publish("PAYMENT_NOTIFICATION", data);
+    }
+
+    /**
+     * Publishes online player names from this server
+     */
+    public void publishPlayerNames(@NotNull Set<String> playerNames) {
+        if (!isActive()) return;
+
+        JsonObject data = new JsonObject();
+        JsonArray namesArray = new JsonArray();
+        playerNames.forEach(namesArray::add);
+        data.add("playerNames", namesArray);
+        data.addProperty("timestamp", System.currentTimeMillis());
+
+        publish("PLAYER_NAMES_UPDATE", data);
+    }
+
+    /**
      * Request balance sync for a specific user
      */
     public void requestUserSync(@NotNull UUID userId) {
@@ -244,6 +284,22 @@ public class RedisSyncManager {
                 }
             }
         });
+    }
+
+    /**
+     * Sync online player names from this server
+     */
+    private void syncPlayerNames() {
+        if (!isActive()) return;
+
+        Set<String> localPlayerNames = new HashSet<>();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            localPlayerNames.add(player.getName());
+        }
+
+        if (!localPlayerNames.isEmpty()) {
+            publishPlayerNames(localPlayerNames);
+        }
     }
 
     /**
@@ -313,6 +369,8 @@ public class RedisSyncManager {
                 case "LEADERBOARD_UPDATE" -> applyLeaderboardUpdate(data);
                 case "TRANSACTION_LOG" -> applyTransactionLog(data);
                 case "USER_SYNC_REQUEST" -> handleUserSyncRequest(data);
+                case "PAYMENT_NOTIFICATION" -> applyPaymentNotification(data);
+                case "PLAYER_NAMES_UPDATE" -> applyPlayerNamesUpdate(data);
                 default -> {}
             }
         }
@@ -397,6 +455,67 @@ public class RedisSyncManager {
         this.plugin.runTaskAsync(() -> {
             this.plugin.getCurrencyManager().getLogger().addExternalLogEntry(logEntry);
         });
+    }
+
+    private void applyPaymentNotification(@NotNull JsonObject data) {
+        UUID recipientId = UUID.fromString(data.get("recipientId").getAsString());
+        String senderName = data.get("senderName").getAsString();
+        String currencyId = data.get("currencyId").getAsString();
+        double amount = data.get("amount").getAsDouble();
+        double newBalance = data.get("newBalance").getAsDouble();
+
+        this.plugin.runNextTick(() -> {
+            Player recipient = Bukkit.getPlayer(recipientId);
+            if (recipient == null) return;
+
+            Currency currency = this.plugin.getCurrencyManager().getCurrency(currencyId);
+            if (currency == null) return;
+
+            currency.sendPrefixed(Lang.CURRENCY_SEND_DONE_NOTIFY, recipient, replacer -> replacer
+                .replace(currency.replacePlaceholders())
+                .replace(Placeholders.GENERIC_AMOUNT, currency.format(amount))
+                .replace(Placeholders.GENERIC_BALANCE, currency.format(newBalance))
+                .replace(Placeholders.PLAYER_NAME, senderName)
+            );
+
+            this.plugin.info("Sent cross-server payment notification to " + recipient.getName() +
+                           " from " + senderName + ": " + currency.format(amount));
+        });
+    }
+
+    private void applyPlayerNamesUpdate(@NotNull JsonObject data) {
+        JsonArray namesArray = data.getAsJsonArray("playerNames");
+
+        synchronized (this.crossServerPlayerNames) {
+            this.crossServerPlayerNames.clear();
+
+            for (int i = 0; i < namesArray.size(); i++) {
+                String playerName = namesArray.get(i).getAsString();
+                this.crossServerPlayerNames.add(playerName);
+            }
+        }
+
+        this.plugin.info("Updated cross-server player names cache with " + namesArray.size() + " players");
+    }
+
+    /**
+     * Gets all player names across servers (local + cross-server)
+     */
+    @NotNull
+    public Set<String> getAllPlayerNames() {
+        Set<String> allNames = new HashSet<>();
+
+        // Add local players
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            allNames.add(player.getName());
+        }
+
+        // Add cross-server players
+        synchronized (this.crossServerPlayerNames) {
+            allNames.addAll(this.crossServerPlayerNames);
+        }
+
+        return allNames;
     }
 
     private void handleUserSyncRequest(@NotNull JsonObject data) {

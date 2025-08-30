@@ -2,6 +2,7 @@ package su.nightexpress.coinsengine.currency.operation.impl;
 
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
+import su.nightexpress.coinsengine.CoinsEnginePlugin;
 import su.nightexpress.coinsengine.Placeholders;
 import su.nightexpress.coinsengine.api.currency.Currency;
 import su.nightexpress.coinsengine.config.Lang;
@@ -28,14 +29,25 @@ public class SendOperation extends ConsoleOperation<Player> {
     @Override
     protected void notifyUser() {
         Player player = this.user.getPlayer();
-        if (player == null) return;
-
-        this.currency.sendPrefixed(Lang.CURRENCY_SEND_DONE_NOTIFY, player, replacer -> replacer
-            .replace(this.currency.replacePlaceholders())
-            .replace(Placeholders.GENERIC_AMOUNT, this.currency.format(this.amount))
-            .replace(Placeholders.GENERIC_BALANCE, this.user.getBalance(this.currency))
-            .replace(Placeholders.PLAYER_NAME, this.sender.getName())
-        );
+        if (player != null) {
+            this.currency.sendPrefixed(Lang.CURRENCY_SEND_DONE_NOTIFY, player, replacer -> replacer
+                .replace(this.currency.replacePlaceholders())
+                .replace(Placeholders.GENERIC_AMOUNT, this.currency.format(this.amount))
+                .replace(Placeholders.GENERIC_BALANCE, this.user.getBalance(this.currency))
+                .replace(Placeholders.PLAYER_NAME, this.sender.getName())
+            );
+        } else {
+            CoinsEnginePlugin plugin = (CoinsEnginePlugin) this.currency.getPlugin();
+            plugin.getRedisSyncManager().ifPresent(sync ->
+                sync.publishPaymentNotification(
+                    this.user.getId(),
+                    this.sender.getName(),
+                    this.currency.getId(),
+                    this.amount,
+                    this.user.getBalance(this.currency)
+                )
+            );
+        }
     }
 
     @Override
