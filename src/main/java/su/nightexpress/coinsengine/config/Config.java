@@ -94,6 +94,64 @@ public class Config {
         "Controls how often currency operations writes to the log file."
     );
 
+    public static final ConfigValue<Boolean> REDIS_ENABLED = ConfigValue.create("Redis.Enabled",
+        false,
+        "Enable realtime synchronization over Redis pub/sub.",
+        "Allows cross-server currency balance synchronization and leaderboard sync."
+    );
+
+    public static final ConfigValue<String> REDIS_HOST = ConfigValue.create("Redis.Host",
+        "127.0.0.1",
+        "Redis server host."
+    );
+
+    public static final ConfigValue<Integer> REDIS_PORT = ConfigValue.create("Redis.Port",
+        6379,
+        "Redis server port."
+    );
+
+    public static final ConfigValue<String> REDIS_PASSWORD = ConfigValue.create("Redis.Password",
+        "",
+        "Redis server password, leave empty if none."
+    );
+
+    public static final ConfigValue<Boolean> REDIS_SSL = ConfigValue.create("Redis.SSL",
+        false,
+        "Use SSL/TLS for Redis connection."
+    );
+
+    public static final ConfigValue<String> REDIS_CHANNEL = ConfigValue.create("Redis.Channel",
+        "coinsengine:sync",
+        "Redis pub/sub channel name used for this plugin."
+    );
+
+    public static final ConfigValue<String> REDIS_NODE_ID = ConfigValue.create("Redis.NodeId",
+        "",
+        "Optional node identifier. If empty, a random UUID is used at runtime."
+    );
+
+    public static final ConfigValue<Integer> REDIS_BALANCE_SYNC_INTERVAL = ConfigValue.create("Redis.Sync.Balance_Interval",
+        30,
+        "Interval (in seconds) for automatic balance synchronization.",
+        "Set to 0 to disable periodic sync (only real-time sync on operations)."
+    );
+
+    public static final ConfigValue<Integer> REDIS_LEADERBOARD_SYNC_INTERVAL = ConfigValue.create("Redis.Sync.Leaderboard_Interval",
+        300,
+        "Interval (in seconds) for leaderboard synchronization.",
+        "Set to 0 to disable leaderboard sync."
+    );
+
+    public static final ConfigValue<Boolean> REDIS_SYNC_USER_DATA = ConfigValue.create("Redis.Sync.User_Data",
+        true,
+        "Enable synchronization of user settings and preferences."
+    );
+
+    public static final ConfigValue<Boolean> REDIS_SYNC_TRANSACTION_LOGS = ConfigValue.create("Redis.Sync.Transaction_Logs",
+        true,
+        "Enable synchronization of currency operation logs."
+    );
+
     public static boolean isTopsEnabled() {
         return TOPS_ENABLED.get();
     }
@@ -108,5 +166,9 @@ public class Config {
 
     public static boolean useCurrencyFormatPAPI() {
         return GENERAL_PLACEHOLDER_API_FOR_CURRENCY_FORMAT.get() && Plugins.hasPlaceholderAPI();
+    }
+
+    public static boolean isRedisEnabled() {
+        return REDIS_ENABLED.get();
     }
 }

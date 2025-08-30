@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'su.nightexpress.coinsengine'
-version = '2.5.2'
+version = '2.5.3'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
@@ -42,7 +42,7 @@ repositories {
 
 dependencies {
     compileOnly 'io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT'
-    compileOnly name: 'nightcore-2.7.16', version: "2.7.16"
+    compileOnly name: 'nightcore-2.7.17', version: "2.7.17"
     compileOnly('com.github.MilkBowl:VaultAPI:1.7') {
         exclude group: 'org.bukkit', module: 'bukkit'
     }

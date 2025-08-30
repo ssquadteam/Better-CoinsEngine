@@ -117,6 +117,11 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
         return this.plugin.getDataFolder() + Config.DIR_CURRENCIES;
     }
 
+    @NotNull
+    public CurrencyLogger getLogger() {
+        return this.logger;
+    }
+
     public void registerCurrency(@NotNull Currency currency) {
         if (this.getCurrency(currency.getId()) != null) {
             this.plugin.error("Could not register duplicated currency: '" + currency.getId() + "'!");
@@ -238,6 +243,10 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
             if (Config.LOGS_TO_FILE.get()) {
                 this.logger.addOperation(result);
             }
+
+            this.plugin.getRedisSyncManager().ifPresent(redis -> {
+                redis.publishTransactionLog(result.getLog());
+            });
         }
 
         if (!result.isSuccess()) {
@@ -245,6 +254,11 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
         }
 
         this.plugin.getUserManager().save(operation.getUser());
+
+        this.plugin.getRedisSyncManager().ifPresent(redis -> {
+            redis.publishUserBalance(operation.getUser());
+        });
+
         return true;
     }
 

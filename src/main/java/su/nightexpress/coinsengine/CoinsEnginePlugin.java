@@ -14,6 +14,7 @@ import su.nightexpress.coinsengine.hook.DeluxeCoinflipHook;
 import su.nightexpress.coinsengine.hook.HookId;
 import su.nightexpress.coinsengine.hook.PlaceholderAPIHook;
 import su.nightexpress.coinsengine.migration.MigrationManager;
+import su.nightexpress.coinsengine.sync.RedisSyncManager;
 import su.nightexpress.coinsengine.tops.TopManager;
 import su.nightexpress.nightcore.NightPlugin;
 import su.nightexpress.nightcore.command.experimental.ImprovedCommands;
@@ -29,6 +30,7 @@ public class CoinsEnginePlugin extends NightPlugin implements ImprovedCommands {
     private CurrencyManager  currencyManager;
     private TopManager       topManager;
     private MigrationManager migrationManager;
+    private RedisSyncManager redisSyncManager;
 
     @Override
     public void enable() {
@@ -60,6 +62,9 @@ public class CoinsEnginePlugin extends NightPlugin implements ImprovedCommands {
         if (Plugins.isInstalled(HookId.DELUXE_COINFLIP)) {
             this.runNextTick(() -> DeluxeCoinflipHook.setup(this));
         }
+
+        this.redisSyncManager = new RedisSyncManager(this);
+        this.redisSyncManager.setup();
     }
 
     private void loadEngine() {
@@ -74,6 +79,7 @@ public class CoinsEnginePlugin extends NightPlugin implements ImprovedCommands {
             PlaceholderAPIHook.shutdown();
         }
 
+        if (this.redisSyncManager != null) this.redisSyncManager.shutdown();
         if (this.topManager != null) this.topManager.shutdown();
         if (this.migrationManager != null) this.migrationManager.shutdown();
         if (this.userManager != null) this.userManager.shutdown();
@@ -116,5 +122,10 @@ public class CoinsEnginePlugin extends NightPlugin implements ImprovedCommands {
     @NotNull
     public UserManager getUserManager() {
         return this.userManager;
+    }
+
+    @NotNull
+    public Optional<RedisSyncManager> getRedisSyncManager() {
+        return Optional.ofNullable(this.redisSyncManager);
     }
 }

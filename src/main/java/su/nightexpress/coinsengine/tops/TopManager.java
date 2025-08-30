@@ -74,6 +74,12 @@ public class TopManager extends AbstractManager<CoinsEnginePlugin> {
             });
 
             this.topEntries.put(currency.getId(), entries);
+
+            this.plugin.getRedisSyncManager().ifPresent(redis -> {
+                if (currency.isLeaderboardEnabled() && !entries.isEmpty()) {
+                    redis.publishLeaderboard(currency.getId(), entries);
+                }
+            });
         });
     }
 
@@ -142,5 +148,20 @@ public class TopManager extends AbstractManager<CoinsEnginePlugin> {
 
     public double getTotalBalance(@NotNull Currency currency) {
         return this.getTopEntries(currency).stream().mapToDouble(TopEntry::getBalance).sum();
+    }
+
+    /**
+     * Updates leaderboard entries from external source (Redis sync)
+     */
+    public void updateExternalTopEntries(@NotNull String currencyId, @NotNull Map<String, TopEntry> entries) {
+        this.topEntries.put(currencyId, new ConcurrentHashMap<>(entries));
+    }
+
+    /**
+     * Gets top entries map for a specific currency (used by Redis sync)
+     */
+    @Nullable
+    public Map<String, TopEntry> getTopEntriesMap(@NotNull String currencyId) {
+        return this.topEntries.get(currencyId);
     }
 }

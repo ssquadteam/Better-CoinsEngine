@@ -39,5 +39,9 @@ public class UserManager extends AbstractUserManager<CoinsEnginePlugin, CoinsUse
             double balance = fresh.getBalance(currency);
             user.getBalance().set(currency, balance); // Bypass balance event call.
         }
+
+        this.plugin.getRedisSyncManager().ifPresent(redis -> {
+            redis.publishUserBalance(user);
+        });
     }
 }

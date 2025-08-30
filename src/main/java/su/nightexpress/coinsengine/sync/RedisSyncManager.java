@@ -1,0 +1,414 @@
+package su.nightexpress.coinsengine.sync;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import org.jetbrains.annotations.NotNull;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
+import redis.clients.jedis.DefaultJedisClientConfig;
+import redis.clients.jedis.HostAndPort;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.JedisPubSub;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
+import su.nightexpress.coinsengine.CoinsEnginePlugin;
+import su.nightexpress.coinsengine.api.currency.Currency;
+import su.nightexpress.coinsengine.config.Config;
+import su.nightexpress.coinsengine.data.impl.CoinsUser;
+import su.nightexpress.coinsengine.tops.TopEntry;
+
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Redis synchronization manager for CoinsEngine
+ * Provides cross-server currency balance synchronization, leaderboard sync, and user data sync
+ */
+public class RedisSyncManager {
+
+    private final CoinsEnginePlugin plugin;
+    private JedisPool pool;
+    private JedisPubSub subscriber;
+    private Thread subscriberThread;
+
+    private final Gson gson;
+    private final String nodeId;
+    private String channel;
+    private volatile boolean active;
+
+    private long balanceSyncInterval;
+    private long leaderboardSyncInterval;
+
+    public RedisSyncManager(@NotNull CoinsEnginePlugin plugin) {
+        this.plugin = plugin;
+        this.gson = new GsonBuilder()
+            .setPrettyPrinting()
+            .create();
+
+        String nid = Config.REDIS_NODE_ID.get();
+        if (nid == null || nid.isBlank()) {
+            nid = UUID.randomUUID().toString();
+        }
+        this.nodeId = nid;
+    }
+
+    public void setup() {
+        if (!Config.isRedisEnabled()) {
+            return;
+        }
+
+        String host = Config.REDIS_HOST.get();
+        int port = Config.REDIS_PORT.get();
+        String password = Config.REDIS_PASSWORD.get();
+        boolean ssl = Config.REDIS_SSL.get();
+        this.channel = Config.REDIS_CHANNEL.get();
+
+        this.balanceSyncInterval = Config.REDIS_BALANCE_SYNC_INTERVAL.get() * 20L;
+        this.leaderboardSyncInterval = Config.REDIS_LEADERBOARD_SYNC_INTERVAL.get() * 20L;
+
+        try {
+            DefaultJedisClientConfig clientConfig = DefaultJedisClientConfig.builder()
+                .password((password == null || password.isEmpty()) ? null : password)
+                .ssl(ssl)
+                .build();
+
+            this.pool = new JedisPool(new GenericObjectPoolConfig<>(), new HostAndPort(host, port), clientConfig);
+            this.active = true;
+            this.startSubscriber();
+            this.startPeriodicSync();
+
+            this.plugin.info("Redis sync enabled. Channel: " + this.channel + " | NodeId: " + this.nodeId);
+        }
+        catch (Exception e) {
+            this.plugin.error("Failed to initialize Redis: " + e.getMessage());
+            this.active = false;
+        }
+    }
+
+    public void shutdown() {
+        this.active = false;
+        try {
+            if (this.subscriber != null) {
+                this.subscriber.unsubscribe();
+            }
+        }
+        catch (Exception ignored) {}
+        try {
+            if (this.subscriberThread != null) {
+                this.subscriberThread.interrupt();
+            }
+        }
+        catch (Exception ignored) {}
+        try {
+            if (this.pool != null) this.pool.close();
+        }
+        catch (Exception ignored) {}
+    }
+
+    public boolean isActive() {
+        return this.pool != null && this.active;
+    }
+
+    @NotNull
+    public String getNodeId() {
+        return this.nodeId;
+    }
+
+    /**
+     * Start periodic synchronization tasks using Folia-compatible scheduling
+     */
+    private void startPeriodicSync() {
+        if (this.balanceSyncInterval > 0) {
+            this.plugin.getFoliaScheduler().runTimerAsync(this::syncAllBalances, 0L, this.balanceSyncInterval);
+        }
+
+        if (this.leaderboardSyncInterval > 0) {
+            this.plugin.getFoliaScheduler().runTimerAsync(this::syncLeaderboards, 0L, this.leaderboardSyncInterval);
+        }
+    }
+
+    /* =========================
+       Publisher API
+       ========================= */
+
+    /**
+     * Publishes user balance update across servers
+     */
+    public void publishUserBalance(@NotNull CoinsUser user) {
+        if (!isActive()) return;
+
+        JsonObject data = new JsonObject();
+        data.addProperty("userId", user.getId().toString());
+        data.addProperty("userName", user.getName());
+        
+        JsonObject balances = new JsonObject();
+        for (Currency currency : this.plugin.getCurrencyManager().getCurrencies()) {
+            balances.addProperty(currency.getId(), user.getBalance(currency));
+        }
+        data.add("balances", balances);
+        
+        JsonObject settings = new JsonObject();
+        settings.addProperty("hiddenFromTops", user.isHiddenFromTops());
+        data.add("settings", settings);
+
+        publish("USER_BALANCE_UPDATE", data);
+    }
+
+    /**
+     * Publishes currency operation (add, remove, set)
+     */
+    public void publishCurrencyOperation(@NotNull UUID userId, @NotNull String currencyId, 
+                                       @NotNull String operation, double amount, double newBalance) {
+        if (!isActive()) return;
+
+        JsonObject data = new JsonObject();
+        data.addProperty("userId", userId.toString());
+        data.addProperty("currencyId", currencyId);
+        data.addProperty("operation", operation);
+        data.addProperty("amount", amount);
+        data.addProperty("newBalance", newBalance);
+        data.addProperty("timestamp", System.currentTimeMillis());
+
+        publish("CURRENCY_OPERATION", data);
+    }
+
+    /**
+     * Publishes leaderboard data
+     */
+    public void publishLeaderboard(@NotNull String currencyId, @NotNull Map<String, TopEntry> entries) {
+        if (!isActive()) return;
+
+        JsonObject data = new JsonObject();
+        data.addProperty("currencyId", currencyId);
+        data.add("entries", gson.toJsonTree(entries));
+        data.addProperty("timestamp", System.currentTimeMillis());
+
+        publish("LEADERBOARD_UPDATE", data);
+    }
+
+    /**
+     * Publishes transaction log entry
+     */
+    public void publishTransactionLog(@NotNull String logEntry) {
+        if (!isActive() || !Config.REDIS_SYNC_TRANSACTION_LOGS.get()) return;
+
+        JsonObject data = new JsonObject();
+        data.addProperty("logEntry", logEntry);
+        data.addProperty("timestamp", System.currentTimeMillis());
+
+        publish("TRANSACTION_LOG", data);
+    }
+
+    /**
+     * Request balance sync for a specific user
+     */
+    public void requestUserSync(@NotNull UUID userId) {
+        if (!isActive()) return;
+
+        JsonObject data = new JsonObject();
+        data.addProperty("userId", userId.toString());
+        data.addProperty("requestingNode", this.nodeId);
+
+        publish("USER_SYNC_REQUEST", data);
+    }
+
+    /**
+     * Sync all online player balances
+     */
+    private void syncAllBalances() {
+        if (!isActive()) return;
+
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            CoinsUser user = this.plugin.getUserManager().getOrFetch(player);
+            if (user != null) {
+                publishUserBalance(user);
+            }
+        }
+    }
+
+    /**
+     * Sync leaderboards for all currencies
+     */
+    private void syncLeaderboards() {
+        if (!isActive() || !this.plugin.getTopManager().isPresent()) return;
+
+        this.plugin.getTopManager().ifPresent(topManager -> {
+            for (Currency currency : this.plugin.getCurrencyManager().getCurrencies()) {
+                if (currency.isLeaderboardEnabled()) {
+                    Map<String, TopEntry> entries = topManager.getTopEntriesMap().get(currency.getId());
+                    if (entries != null && !entries.isEmpty()) {
+                        publishLeaderboard(currency.getId(), entries);
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Core publish method
+     */
+    private void publish(@NotNull String type, @NotNull JsonObject data) {
+        if (!isActive()) return;
+
+        JsonObject root = new JsonObject();
+        root.addProperty("type", type);
+        root.addProperty("nodeId", this.nodeId);
+        root.add("data", data);
+
+        this.plugin.getFoliaScheduler().runAsync(() -> {
+            try (Jedis jedis = this.pool.getResource()) {
+                jedis.publish(this.channel, this.gson.toJson(root));
+            }
+            catch (Exception e) {
+                this.plugin.warn("Redis publish failed: " + e.getMessage());
+            }
+        });
+    }
+
+    /* =========================
+       Subscriber
+       ========================= */
+
+    private void startSubscriber() {
+        this.subscriber = new JedisPubSub() {
+            @Override
+            public void onMessage(String channel, String message) {
+                handleIncoming(message);
+            }
+        };
+
+        this.subscriberThread = new Thread(() -> {
+            try (Jedis jedis = this.pool.getResource()) {
+                jedis.subscribe(this.subscriber, this.channel);
+            }
+            catch (Exception e) {
+                this.plugin.error("Redis subscriber error: " + e.getMessage());
+            }
+            finally {
+                this.active = false;
+            }
+        }, "CoinsEngine-RedisSubscriber");
+
+        this.subscriberThread.setDaemon(true);
+        this.subscriberThread.start();
+    }
+
+    private void handleIncoming(@NotNull String message) {
+        try {
+            JsonObject root = gson.fromJson(message, JsonObject.class);
+            String sourceNodeId = root.get("nodeId").getAsString();
+
+            if (sourceNodeId.equals(this.nodeId)) {
+                return;
+            }
+
+            String type = root.get("type").getAsString();
+            JsonObject data = root.getAsJsonObject("data");
+
+            switch (type) {
+                case "USER_BALANCE_UPDATE" -> applyUserBalanceUpdate(data);
+                case "CURRENCY_OPERATION" -> applyCurrencyOperation(data);
+                case "LEADERBOARD_UPDATE" -> applyLeaderboardUpdate(data);
+                case "TRANSACTION_LOG" -> applyTransactionLog(data);
+                case "USER_SYNC_REQUEST" -> handleUserSyncRequest(data);
+                default -> {}
+            }
+        }
+        catch (Exception e) {
+            this.plugin.warn("Failed to handle Redis message: " + e.getMessage());
+        }
+    }
+
+    /* =========================
+       Message Handlers
+       ========================= */
+
+    private void applyUserBalanceUpdate(@NotNull JsonObject data) {
+        UUID userId = UUID.fromString(data.get("userId").getAsString());
+        String userName = data.get("userName").getAsString();
+        JsonObject balances = data.getAsJsonObject("balances");
+        JsonObject settings = data.getAsJsonObject("settings");
+
+        this.plugin.runNextTick(() -> {
+            CoinsUser user = this.plugin.getUserManager().getOrFetch(userId);
+            if (user == null) {
+                user = this.plugin.getUserManager().getOrFetch(userId);
+                if (user == null) return;
+            }
+
+            for (Currency currency : this.plugin.getCurrencyManager().getCurrencies()) {
+                if (balances.has(currency.getId())) {
+                    double balance = balances.get(currency.getId()).getAsDouble();
+                    user.getBalance().set(currency, balance); // Bypass balance event call
+                }
+            }
+
+            if (settings.has("hiddenFromTops")) {
+                user.setHiddenFromTops(settings.get("hiddenFromTops").getAsBoolean());
+            }
+
+            this.plugin.getUserManager().save(user);
+        });
+    }
+
+    private void applyCurrencyOperation(@NotNull JsonObject data) {
+        UUID userId = UUID.fromString(data.get("userId").getAsString());
+        String currencyId = data.get("currencyId").getAsString();
+        String operation = data.get("operation").getAsString();
+        double amount = data.get("amount").getAsDouble();
+        double newBalance = data.get("newBalance").getAsDouble();
+
+        this.plugin.runNextTick(() -> {
+            CoinsUser user = this.plugin.getUserManager().getOrFetch(userId);
+            Currency currency = this.plugin.getCurrencyManager().getCurrency(currencyId);
+
+            if (user != null && currency != null) {
+                user.getBalance().set(currency, newBalance);
+                this.plugin.getUserManager().save(user);
+
+                this.plugin.info("Applied Redis currency operation: " + operation + " " + amount + " " +
+                               currencyId + " for " + user.getName() + " (new balance: " + newBalance + ")");
+            }
+        });
+    }
+
+    private void applyLeaderboardUpdate(@NotNull JsonObject data) {
+        if (!this.plugin.getTopManager().isPresent()) return;
+
+        String currencyId = data.get("currencyId").getAsString();
+        Map<String, TopEntry> entries = gson.fromJson(data.get("entries"),
+            new com.google.gson.reflect.TypeToken<Map<String, TopEntry>>(){}.getType());
+
+        this.plugin.runNextTick(() -> {
+            this.plugin.getTopManager().ifPresent(topManager -> {
+                topManager.updateExternalTopEntries(currencyId, entries);
+                this.plugin.info("Updated leaderboard for currency: " + currencyId + " (" + entries.size() + " entries)");
+            });
+        });
+    }
+
+    private void applyTransactionLog(@NotNull JsonObject data) {
+        if (!Config.REDIS_SYNC_TRANSACTION_LOGS.get()) return;
+
+        String logEntry = data.get("logEntry").getAsString();
+
+        this.plugin.runTaskAsync(() -> {
+            this.plugin.getCurrencyManager().getLogger().addExternalLogEntry(logEntry);
+        });
+    }
+
+    private void handleUserSyncRequest(@NotNull JsonObject data) {
+        UUID userId = UUID.fromString(data.get("userId").getAsString());
+        String requestingNode = data.get("requestingNode").getAsString();
+
+        this.plugin.runNextTick(() -> {
+            CoinsUser user = this.plugin.getUserManager().getOrFetch(userId);
+            if (user != null) {
+                publishUserBalance(user);
+                this.plugin.info("Sent user sync data for " + user.getName() + " to node: " + requestingNode);
+            }
+        });
+    }
+}

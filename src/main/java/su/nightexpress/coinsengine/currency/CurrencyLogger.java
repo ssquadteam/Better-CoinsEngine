@@ -47,6 +47,20 @@ public class CurrencyLogger {
         this.queue.add(result);
     }
 
+    /**
+     * Adds an external log entry from Redis sync
+     */
+    public void addExternalLogEntry(@NotNull String logEntry) {
+        try {
+            this.writer.append(logEntry);
+            this.writer.newLine();
+            this.writer.flush();
+        }
+        catch (IOException exception) {
+            exception.printStackTrace();
+        }
+    }
+
     public void write() {
         try {
             while (this.running && !this.queue.isEmpty()) {
