@@ -258,6 +258,19 @@ public class RedisSyncManager {
     }
 
     /**
+     * Request user creation for cross-server operations
+     */
+    public void requestUserCreation(@NotNull String playerName, @NotNull String requestingNode) {
+        if (!isActive()) return;
+
+        JsonObject data = new JsonObject();
+        data.addProperty("playerName", playerName);
+        data.addProperty("requestingNode", requestingNode);
+
+        publish("USER_CREATE_REQUEST", data);
+    }
+
+    /**
      * Sync all online player balances
      */
     private void syncAllBalances() {
@@ -372,6 +385,7 @@ public class RedisSyncManager {
                 case "LEADERBOARD_UPDATE" -> applyLeaderboardUpdate(data);
                 case "TRANSACTION_LOG" -> applyTransactionLog(data);
                 case "USER_SYNC_REQUEST" -> handleUserSyncRequest(data);
+                case "USER_CREATE_REQUEST" -> handleUserCreateRequest(data);
                 case "PAYMENT_NOTIFICATION" -> applyPaymentNotification(data);
                 case "PLAYER_NAMES_UPDATE" -> applyPlayerNamesUpdate(data);
                 default -> {}
@@ -422,16 +436,45 @@ public class RedisSyncManager {
         double newBalance = data.get("newBalance").getAsDouble();
 
         this.plugin.runNextTick(() -> {
-            CoinsUser user = this.plugin.getUserManager().getOrFetch(userId);
+            Player player = Bukkit.getPlayer(userId);
+            if (player == null) return;
+
             Currency currency = this.plugin.getCurrencyManager().getCurrency(currencyId);
+            if (currency == null) return;
 
-            if (user != null && currency != null) {
-                user.getBalance().set(currency, newBalance);
-                this.plugin.getUserManager().save(user);
-
-                this.plugin.info("Applied Redis currency operation: " + operation + " " + amount + " " +
-                               currencyId + " for " + user.getName() + " (new balance: " + newBalance + ")");
+            switch (operation) {
+                case "ADD_NOTIFY" -> {
+                    currency.sendPrefixed(Lang.COMMAND_CURRENCY_GIVE_NOTIFY, player, replacer -> replacer
+                        .replace(currency.replacePlaceholders())
+                        .replace(Placeholders.GENERIC_AMOUNT, currency.format(amount))
+                        .replace(Placeholders.GENERIC_BALANCE, currency.format(newBalance))
+                    );
+                }
+                case "SET_NOTIFY" -> {
+                    currency.sendPrefixed(Lang.COMMAND_CURRENCY_SET_NOTIFY, player, replacer -> replacer
+                        .replace(currency.replacePlaceholders())
+                        .replace(Placeholders.GENERIC_AMOUNT, currency.format(amount))
+                        .replace(Placeholders.GENERIC_BALANCE, currency.format(newBalance))
+                    );
+                }
+                case "REMOVE_NOTIFY" -> {
+                    currency.sendPrefixed(Lang.COMMAND_CURRENCY_TAKE_NOTIFY, player, replacer -> replacer
+                        .replace(currency.replacePlaceholders())
+                        .replace(Placeholders.GENERIC_AMOUNT, currency.format(amount))
+                        .replace(Placeholders.GENERIC_BALANCE, currency.format(newBalance))
+                    );
+                }
+                case "PAYMENTS_TOGGLE" -> {
+                    boolean enabled = amount > 0;
+                    currency.sendPrefixed(Lang.COMMAND_CURRENCY_PAYMENTS_TOGGLE, player, replacer -> replacer
+                        .replace(currency.replacePlaceholders())
+                        .replace(Placeholders.GENERIC_STATE, Lang.getEnabledOrDisabled(enabled))
+                    );
+                }
             }
+
+            this.plugin.info("Sent cross-server currency notification: " + operation + " " + amount + " " +
+                           currencyId + " to " + player.getName());
         });
     }
 
@@ -497,8 +540,6 @@ public class RedisSyncManager {
                 this.crossServerPlayerNames.add(playerName);
             }
         }
-
-        this.plugin.info("Updated cross-server player names cache with " + namesArray.size() + " players");
     }
 
     /**
@@ -530,6 +571,24 @@ public class RedisSyncManager {
             if (user != null) {
                 publishUserBalance(user);
                 this.plugin.info("Sent user sync data for " + user.getName() + " to node: " + requestingNode);
+            }
+        });
+    }
+
+    private void handleUserCreateRequest(@NotNull JsonObject data) {
+        String playerName = data.get("playerName").getAsString();
+        String requestingNode = data.get("requestingNode").getAsString();
+
+        if (requestingNode.equals(this.nodeId)) return;
+
+        this.plugin.runNextTick(() -> {
+            Player player = Bukkit.getPlayerExact(playerName);
+            if (player != null) {
+                CoinsUser user = this.plugin.getUserManager().getUserData(player);
+                if (user != null) {
+                    publishUserBalance(user);
+                    this.plugin.info("Sent user data for cross-server request: " + playerName);
+                }
             }
         });
     }

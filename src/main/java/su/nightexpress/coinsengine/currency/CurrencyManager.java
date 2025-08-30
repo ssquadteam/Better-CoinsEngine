@@ -322,16 +322,32 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
 
         plugin.getUserManager().manageUser(name, user -> {
             if (user == null) {
-                Lang.ERROR_INVALID_PLAYER.getMessage(this.plugin).send(sender);
+                this.plugin.getRedisSyncManager().ifPresent(redis ->
+                    redis.requestUserCreation(name, redis.getNodeId())
+                );
+
+                this.plugin.runTaskLater(() -> {
+                    this.plugin.getUserManager().manageUser(name, retryUser -> {
+                        if (retryUser == null) {
+                            Lang.ERROR_INVALID_PLAYER.getMessage(this.plugin).send(sender);
+                            return;
+                        }
+                        displayBalance(sender, currency, retryUser, isOwn);
+                    });
+                }, 40L);
                 return;
             }
 
-            currency.sendPrefixed((isOwn ? Lang.CURRENCY_BALANCE_DISPLAY_OWN : Lang.CURRENCY_BALANCE_DISPLAY_OTHERS), sender, replacer -> replacer
-                .replace(currency.replacePlaceholders())
-                .replace(Placeholders.PLAYER_NAME, user.getName())
-                .replace(Placeholders.GENERIC_BALANCE, currency.format(user.getBalance(currency)))
-            );
+            displayBalance(sender, currency, user, isOwn);
         });
+    }
+
+    private void displayBalance(@NotNull CommandSender sender, @NotNull Currency currency, @NotNull CoinsUser user, boolean isOwn) {
+        currency.sendPrefixed((isOwn ? Lang.CURRENCY_BALANCE_DISPLAY_OWN : Lang.CURRENCY_BALANCE_DISPLAY_OTHERS), sender, replacer -> replacer
+            .replace(currency.replacePlaceholders())
+            .replace(Placeholders.PLAYER_NAME, user.getName())
+            .replace(Placeholders.GENERIC_BALANCE, currency.format(user.getBalance(currency)))
+        );
     }
 
     public void showWallet(@NotNull Player player) {
@@ -373,30 +389,56 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
 
         this.plugin.getUserManager().manageUser(name, user -> {
             if (user == null) {
-                Lang.ERROR_INVALID_PLAYER.getMessage(this.plugin).send(sender);
+                this.plugin.getRedisSyncManager().ifPresent(redis ->
+                    redis.requestUserCreation(name, redis.getNodeId())
+                );
+
+                this.plugin.runTaskLater(() -> {
+                    this.plugin.getUserManager().manageUser(name, retryUser -> {
+                        if (retryUser == null) {
+                            Lang.ERROR_INVALID_PLAYER.getMessage(this.plugin).send(sender);
+                            return;
+                        }
+                        executeTogglePayments(sender, currency, retryUser, isOwn, silent);
+                    });
+                }, 40L);
                 return;
             }
 
-            CurrencySettings settings = user.getSettings(currency);
-            settings.setPaymentsEnabled(!settings.isPaymentsEnabled());
-            plugin.getUserManager().save(user);
-
-            if (!isOwn) {
-                currency.sendPrefixed(Lang.COMMAND_CURRENCY_PAYMENTS_TARGET, sender, replacer -> replacer
-                    .replace(currency.replacePlaceholders())
-                    .replace(Placeholders.PLAYER_NAME, user.getName())
-                    .replace(Placeholders.GENERIC_STATE, Lang.getEnabledOrDisabled(settings.isPaymentsEnabled()))
-                );
-            }
-
-            Player target = user.getPlayer();
-            if (!silent && target != null) {
-                currency.sendPrefixed(Lang.COMMAND_CURRENCY_PAYMENTS_TOGGLE, target, replacer -> replacer
-                    .replace(currency.replacePlaceholders())
-                    .replace(Placeholders.GENERIC_STATE, Lang.getEnabledOrDisabled(settings.isPaymentsEnabled()))
-                );
-            }
+            executeTogglePayments(sender, currency, user, isOwn, silent);
         });
+    }
+
+    private void executeTogglePayments(@NotNull CommandSender sender, @NotNull Currency currency, @NotNull CoinsUser user, boolean isOwn, boolean silent) {
+        CurrencySettings settings = user.getSettings(currency);
+        settings.setPaymentsEnabled(!settings.isPaymentsEnabled());
+        plugin.getUserManager().save(user);
+
+        if (!isOwn) {
+            currency.sendPrefixed(Lang.COMMAND_CURRENCY_PAYMENTS_TARGET, sender, replacer -> replacer
+                .replace(currency.replacePlaceholders())
+                .replace(Placeholders.PLAYER_NAME, user.getName())
+                .replace(Placeholders.GENERIC_STATE, Lang.getEnabledOrDisabled(settings.isPaymentsEnabled()))
+            );
+        }
+
+        Player target = user.getPlayer();
+        if (!silent && target != null) {
+            currency.sendPrefixed(Lang.COMMAND_CURRENCY_PAYMENTS_TOGGLE, target, replacer -> replacer
+                .replace(currency.replacePlaceholders())
+                .replace(Placeholders.GENERIC_STATE, Lang.getEnabledOrDisabled(settings.isPaymentsEnabled()))
+            );
+        } else if (!silent) {
+            this.plugin.getRedisSyncManager().ifPresent(redis ->
+                redis.publishCurrencyOperation(
+                    user.getId(),
+                    currency.getId(),
+                    "PAYMENTS_TOGGLE",
+                    settings.isPaymentsEnabled() ? 1.0 : 0.0,
+                    0.0
+                )
+            );
+        }
     }
 
     public boolean sendCurrency(@NotNull Player from, @NotNull String targetName, @NotNull Currency currency, double rawAmount) {
@@ -422,25 +464,41 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
 
         this.plugin.getUserManager().manageUser(targetName, targetUser -> {
             if (targetUser == null) {
-                Lang.ERROR_INVALID_PLAYER.getMessage(this.plugin).send(from);
-                return;
-            }
-
-            CurrencySettings settings = targetUser.getSettings(currency);
-            if (!settings.isPaymentsEnabled()) {
-                currency.sendPrefixed(Lang.CURRENCY_SEND_ERROR_NO_PAYMENTS, from, replacer -> replacer
-                    .replace(Placeholders.PLAYER_NAME, targetUser.getName())
-                    .replace(currency.replacePlaceholders())
+                this.plugin.getRedisSyncManager().ifPresent(redis ->
+                    redis.requestUserCreation(targetName, redis.getNodeId())
                 );
+
+                this.plugin.runTaskLater(() -> {
+                    this.plugin.getUserManager().manageUser(targetName, retryUser -> {
+                        if (retryUser == null) {
+                            Lang.ERROR_INVALID_PLAYER.getMessage(this.plugin).send(from);
+                            return;
+                        }
+                        executeSendOperation(currency, amount, retryUser, from, fromUser);
+                    });
+                }, 40L);
                 return;
             }
 
-            SendOperation operation = new SendOperation(currency, amount, targetUser, from, fromUser);
-            this.performOperation(operation);
-            this.plugin.getUserManager().save(fromUser);
+            executeSendOperation(currency, amount, targetUser, from, fromUser);
         });
 
         return true;
+    }
+
+    private void executeSendOperation(@NotNull Currency currency, double amount, @NotNull CoinsUser targetUser, @NotNull Player from, @NotNull CoinsUser fromUser) {
+        CurrencySettings settings = targetUser.getSettings(currency);
+        if (!settings.isPaymentsEnabled()) {
+            currency.sendPrefixed(Lang.CURRENCY_SEND_ERROR_NO_PAYMENTS, from, replacer -> replacer
+                .replace(Placeholders.PLAYER_NAME, targetUser.getName())
+                .replace(currency.replacePlaceholders())
+            );
+            return;
+        }
+
+        SendOperation operation = new SendOperation(currency, amount, targetUser, from, fromUser);
+        this.performOperation(operation);
+        this.plugin.getUserManager().save(fromUser);
     }
 
     public boolean exchange(@NotNull Player player, @NotNull Currency from, @NotNull Currency to, double initAmount) {

@@ -8,6 +8,14 @@ import su.nightexpress.nightcore.command.experimental.argument.ArgumentTypes;
 import su.nightexpress.nightcore.command.experimental.argument.CommandArgument;
 import su.nightexpress.nightcore.command.experimental.builder.ArgumentBuilder;
 import su.nightexpress.nightcore.util.Lists;
+import su.nightexpress.nightcore.util.Players;
+
+import java.util.ArrayList;
+import java.util.List;
+import su.nightexpress.nightcore.util.Players;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class CommandArguments {
 
@@ -33,5 +41,23 @@ public class CommandArguments {
             .localized(Lang.COMMAND_ARGUMENT_NAME_AMOUNT)
             .withSamples(context -> Lists.newList("1", "10", "100", "500"))
             ;
+    }
+
+    @NotNull
+    public static ArgumentBuilder<String> crossServerPlayerName(@NotNull CoinsEnginePlugin plugin) {
+        return CommandArgument.builder(PLAYER, ArgumentTypes.STRING)
+            .localized(Lang.COMMAND_ARGUMENT_NAME_PLAYER)
+            .withSamples(context -> {
+                List<String> names = new ArrayList<>();
+                if (context.getPlayer() != null) {
+                    names.addAll(Players.playerNames(context.getPlayer()));
+                } else {
+                    names.addAll(Players.playerNames());
+                }
+                plugin.getRedisSyncManager().ifPresent(redis -> {
+                    names.addAll(redis.getAllPlayerNames());
+                });
+                return names.stream().distinct().sorted().toList();
+            });
     }
 }

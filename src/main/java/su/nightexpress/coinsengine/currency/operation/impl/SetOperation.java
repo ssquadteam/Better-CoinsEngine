@@ -3,7 +3,9 @@ package su.nightexpress.coinsengine.currency.operation.impl;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
+import su.nightexpress.coinsengine.CoinsEnginePlugin;
 import su.nightexpress.coinsengine.Placeholders;
+import su.nightexpress.coinsengine.api.CoinsEngineAPI;
 import su.nightexpress.coinsengine.api.currency.Currency;
 import su.nightexpress.coinsengine.config.Lang;
 import su.nightexpress.coinsengine.currency.operation.ConsoleOperation;
@@ -41,12 +43,23 @@ public class SetOperation extends ConsoleOperation<CommandSender> {
     @Override
     protected void notifyUser() {
         Player target = this.user.getPlayer();
-        if (target == null) return;
-
-        this.currency.sendPrefixed(Lang.COMMAND_CURRENCY_SET_NOTIFY, target, replacer -> replacer
-            .replace(currency.replacePlaceholders())
-            .replace(Placeholders.GENERIC_AMOUNT, currency.format(amount))
-            .replace(Placeholders.GENERIC_BALANCE, currency.format(user.getBalance(currency)))
-        );
+        if (target != null) {
+            this.currency.sendPrefixed(Lang.COMMAND_CURRENCY_SET_NOTIFY, target, replacer -> replacer
+                .replace(currency.replacePlaceholders())
+                .replace(Placeholders.GENERIC_AMOUNT, currency.format(amount))
+                .replace(Placeholders.GENERIC_BALANCE, currency.format(user.getBalance(currency)))
+            );
+        } else {
+            CoinsEnginePlugin plugin = CoinsEngineAPI.plugin();
+            plugin.getRedisSyncManager().ifPresent(sync ->
+                sync.publishCurrencyOperation(
+                    this.user.getId(),
+                    this.currency.getId(),
+                    "SET_NOTIFY",
+                    this.amount,
+                    this.user.getBalance(this.currency)
+                )
+            );
+        }
     }
 }

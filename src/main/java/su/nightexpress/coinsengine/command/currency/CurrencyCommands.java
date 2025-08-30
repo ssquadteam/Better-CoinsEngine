@@ -177,7 +177,7 @@ public class CurrencyCommands {
         builder
             .permission(Perms.COMMAND_CURRENCY_BALANCE)
             .description(Lang.COMMAND_CURRENCY_BALANCE_DESC)
-            .withArgument(ArgumentTypes.playerName(CommandArguments.PLAYER).permission(Perms.COMMAND_CURRENCY_BALANCE_OTHERS))
+            .withArgument(CommandArguments.crossServerPlayerName(plugin).permission(Perms.COMMAND_CURRENCY_BALANCE_OTHERS))
             .executes((context, arguments) -> showBalance(currency, context, arguments));
     }
 
@@ -186,7 +186,7 @@ public class CurrencyCommands {
             .playerOnly()
             .permission(Perms.COMMAND_CURRENCY_SEND)
             .description(Lang.COMMAND_CURRENCY_SEND_DESC)
-            .withArgument(ArgumentTypes.playerName(CommandArguments.PLAYER).required())
+            .withArgument(CommandArguments.crossServerPlayerName(plugin).required())
             .withArgument(CommandArguments.amount().required())
             .executes((context, arguments) -> send(currency, context, arguments));
     }
@@ -206,7 +206,7 @@ public class CurrencyCommands {
         builder
             .permission(Perms.COMMAND_CURRENCY_GIVE)
             .description(Lang.COMMAND_CURRENCY_GIVE_DESC)
-            .withArgument(ArgumentTypes.playerName(CommandArguments.PLAYER).required())
+            .withArgument(CommandArguments.crossServerPlayerName(plugin).required())
             .withArgument(CommandArguments.amount().required())
             .withFlag(CommandFlags.silent())
             .withFlag(CommandFlags.silentOutput())
@@ -227,7 +227,7 @@ public class CurrencyCommands {
         builder
             .permission(Perms.COMMAND_CURRENCY_SET)
             .description(Lang.COMMAND_CURRENCY_SET_DESC)
-            .withArgument(ArgumentTypes.playerName(CommandArguments.PLAYER).required())
+            .withArgument(CommandArguments.crossServerPlayerName(plugin).required())
             .withArgument(CommandArguments.amount().required())
             .withFlag(CommandFlags.silent())
             .withFlag(CommandFlags.silentOutput())
@@ -238,7 +238,7 @@ public class CurrencyCommands {
         builder
             .permission(Perms.COMMAND_CURRENCY_TAKE)
             .description(Lang.COMMAND_CURRENCY_TAKE_DESC)
-            .withArgument(ArgumentTypes.playerName(CommandArguments.PLAYER).required())
+            .withArgument(CommandArguments.crossServerPlayerName(plugin).required())
             .withArgument(CommandArguments.amount().required())
             .withFlag(CommandFlags.silent())
             .withFlag(CommandFlags.silentOutput())
@@ -249,7 +249,7 @@ public class CurrencyCommands {
         builder
             .permission(Perms.COMMAND_CURRENCY_PAYMENTS)
             .description(Lang.COMMAND_CURRENCY_PAYMENTS_DESC)
-            .withArgument(ArgumentTypes.playerName(CommandArguments.PLAYER).permission(Perms.COMMAND_CURRENCY_PAYMENTS_OTHERS))
+            .withArgument(CommandArguments.crossServerPlayerName(plugin).permission(Perms.COMMAND_CURRENCY_PAYMENTS_OTHERS))
             .withFlag(CommandFlags.silent().permission(Perms.COMMAND_CURRENCY_PAYMENTS_OTHERS))
             .executes((context, arguments) -> togglePayments(currency, context, arguments));
     }
@@ -335,18 +335,41 @@ public class CurrencyCommands {
         double amount = arguments.getDoubleArgument(CommandArguments.AMOUNT);
         if (amount < 0D) return false;
 
-        plugin.getUserManager().manageUser(arguments.getStringArgument(CommandArguments.PLAYER), user -> {
+        String playerName = arguments.getStringArgument(CommandArguments.PLAYER);
+
+        plugin.getUserManager().manageUser(playerName, user -> {
             if (user == null) {
-                context.errorBadPlayer();
+                plugin.getRedisSyncManager().ifPresent(redis ->
+                    redis.requestUserCreation(playerName, redis.getNodeId())
+                );
+
+                plugin.runTaskLater(() -> {
+                    plugin.getUserManager().manageUser(playerName, retryUser -> {
+                        if (retryUser == null) {
+                            context.errorBadPlayer();
+                            return;
+                        }
+                        executeBalanceOperation(currency, provider, context, arguments, amount, retryUser);
+                    });
+                }, 40L);
                 return;
             }
 
-            T operation = provider.provide(currency, amount, user, context.getSender());
-            operation.setFeedback(!arguments.hasFlag(CommandFlags.SILENT_FEEDBACK));
-            operation.setNotify(!arguments.hasFlag(CommandFlags.SILENT));
-
-            plugin.getCurrencyManager().performOperation(operation);
+            executeBalanceOperation(currency, provider, context, arguments, amount, user);
         });
         return true;
+    }
+
+    private static <T extends ConsoleOperation<CommandSender>> void executeBalanceOperation(@NotNull Currency currency,
+                                                                                             @NotNull OperationProvider<T> provider,
+                                                                                             @NotNull CommandContext context,
+                                                                                             @NotNull ParsedArguments arguments,
+                                                                                             double amount,
+                                                                                             @NotNull CoinsUser user) {
+        T operation = provider.provide(currency, amount, user, context.getSender());
+        operation.setFeedback(!arguments.hasFlag(CommandFlags.SILENT_FEEDBACK));
+        operation.setNotify(!arguments.hasFlag(CommandFlags.SILENT));
+
+        plugin.getCurrencyManager().performOperation(operation);
     }
 }
