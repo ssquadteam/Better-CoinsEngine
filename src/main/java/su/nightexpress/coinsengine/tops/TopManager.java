@@ -44,7 +44,7 @@ public class TopManager extends AbstractManager<CoinsEnginePlugin> {
 
         this.addListener(new TopsListener(this.plugin, this));
 
-        this.addAsyncTask(this::updateBalances, Config.TOPS_UPDATE_INTERVAL.get());
+        this.plugin.getFoliaScheduler().runTimerAsync(this::updateBalances, 0L, Config.TOPS_UPDATE_INTERVAL.get());
     }
 
     @Override

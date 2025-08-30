@@ -101,7 +101,7 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
     private void loadLogger() {
         try {
             this.logger = new CurrencyLogger(this.plugin);
-            this.addAsyncTask(this::writeLogs, Config.LOGS_WRITE_INTERVAL.get());
+            this.plugin.getFoliaScheduler().runTimerAsync(this::writeLogs, 0L, Config.LOGS_WRITE_INTERVAL.get());
         }
         catch (IOException exception) {
             exception.printStackTrace();
