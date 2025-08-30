@@ -2,6 +2,7 @@ package su.nightexpress.coinsengine.sync;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.jetbrains.annotations.NotNull;
 import org.bukkit.Bukkit;
@@ -13,8 +14,10 @@ import su.nightexpress.nightcore.lib.redis.jedis.JedisPool;
 import su.nightexpress.nightcore.lib.redis.jedis.JedisPubSub;
 import su.nightexpress.nightcore.lib.commons.pool2.impl.GenericObjectPoolConfig;
 import su.nightexpress.coinsengine.CoinsEnginePlugin;
+import su.nightexpress.coinsengine.Placeholders;
 import su.nightexpress.coinsengine.api.currency.Currency;
 import su.nightexpress.coinsengine.config.Config;
+import su.nightexpress.coinsengine.config.Lang;
 import su.nightexpress.coinsengine.data.impl.CoinsUser;
 import su.nightexpress.coinsengine.tops.TopEntry;
 

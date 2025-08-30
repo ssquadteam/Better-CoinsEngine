@@ -4,6 +4,7 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import su.nightexpress.coinsengine.CoinsEnginePlugin;
 import su.nightexpress.coinsengine.Placeholders;
+import su.nightexpress.coinsengine.api.CoinsEngineAPI;
 import su.nightexpress.coinsengine.api.currency.Currency;
 import su.nightexpress.coinsengine.config.Lang;
 import su.nightexpress.coinsengine.currency.operation.ConsoleOperation;
@@ -37,7 +38,7 @@ public class SendOperation extends ConsoleOperation<Player> {
                 .replace(Placeholders.PLAYER_NAME, this.sender.getName())
             );
         } else {
-            CoinsEnginePlugin plugin = (CoinsEnginePlugin) this.currency.getPlugin();
+            CoinsEnginePlugin plugin = CoinsEngineAPI.plugin();
             plugin.getRedisSyncManager().ifPresent(sync ->
                 sync.publishPaymentNotification(
                     this.user.getId(),
