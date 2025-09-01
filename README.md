@@ -12,6 +12,16 @@
 **CoinsEngine** is a lightweight, highly customizable economy & custom virtual currency provider with built-in [Vault integration](https://nightexpressdev.com/coinsengine/hooks/vault/).
 </div>
 
+# Enhancements in this Fork
+- Folia Support
+- Updated to use Better-NightCore (2.7.18)
+- Added Wallet Pagination and page size option
+- Redis Sync (balances, leaderboards, transaction logs)
+- Switched to VaultUnlocked for economy API
+- Cross-Server messaging and player lookup improvements
+- Gradle build and CI release workflow
+- Big Decimal support
+
 # Features
 - [Unlimited Currencies](https://nightexpressdev.com/coinsengine/features/currencies). Create as many currencies as you want.
 - [Data Migration](https://nightexpressdev.com/coinsengine/features/migration). Migrate player balances from other plugins with a single command.
