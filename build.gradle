@@ -42,12 +42,11 @@ repositories {
 
 dependencies {
     compileOnly 'io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT'
-    compileOnly name: 'nightcore-2.7.17', version: "2.7.17"
-    // Use local VaultUnlocked API instead of remote VaultAPI
-    compileOnly name: 'VaultUnlockedAPI-2.15'
     compileOnly 'me.clip:placeholderapi:2.11.6'
     compileOnly 'org.black_ixx:playerpoints:3.0.0'
     compileOnly 'com.github.ItzSave:DeluxeCoinflipAPI:1.0.4'
+    compileOnly name: 'nightcore-2.7.18', version: "2.7.18"
+    compileOnly name: 'VaultUnlockedAPI-2.15'
 }
 
 processResources {
