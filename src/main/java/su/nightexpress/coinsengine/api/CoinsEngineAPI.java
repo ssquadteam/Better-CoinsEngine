@@ -11,6 +11,7 @@ import su.nightexpress.coinsengine.currency.CurrencyOperations;
 import su.nightexpress.coinsengine.data.UserManager;
 import su.nightexpress.coinsengine.data.impl.CoinsUser;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -100,6 +101,14 @@ public class CoinsEngineAPI {
         editBalance(player, CoinsEngineAPI::getUserData, user -> CurrencyOperations.forAddSilently(currency, amount, user));
     }
 
+    public static boolean addBalance(@NotNull UUID playerId, @NotNull Currency currency, @NotNull BigDecimal amount) {
+        return editBalance(playerId, CoinsEngineAPI::getUserData, user -> CurrencyOperations.forAddSilently(currency, amount.doubleValue(), user));
+    }
+
+    public static void addBalance(@NotNull Player player, @NotNull Currency currency, @NotNull BigDecimal amount) {
+        editBalance(player, CoinsEngineAPI::getUserData, user -> CurrencyOperations.forAddSilently(currency, amount.doubleValue(), user));
+    }
+
 
 
     public static boolean setBalance(@NotNull UUID playerId, @NotNull String currencyName, double amount) {
@@ -115,6 +124,14 @@ public class CoinsEngineAPI {
         editBalance(player, CoinsEngineAPI::getUserData, user -> CurrencyOperations.forSetSilently(currency, amount, user));
     }
 
+    public static boolean setBalance(@NotNull UUID playerId, @NotNull Currency currency, @NotNull BigDecimal amount) {
+        return editBalance(playerId, CoinsEngineAPI::getUserData, user -> CurrencyOperations.forSetSilently(currency, amount.doubleValue(), user));
+    }
+
+    public static void setBalance(@NotNull Player player, @NotNull Currency currency, @NotNull BigDecimal amount) {
+        editBalance(player, CoinsEngineAPI::getUserData, user -> CurrencyOperations.forSetSilently(currency, amount.doubleValue(), user));
+    }
+
 
 
     public static boolean removeBalance(@NotNull UUID playerId, @NotNull String currencyName, double amount) {
@@ -128,6 +145,14 @@ public class CoinsEngineAPI {
 
     public static void removeBalance(@NotNull Player player, @NotNull Currency currency, double amount) {
         editBalance(player, CoinsEngineAPI::getUserData, user -> CurrencyOperations.forRemoveSilently(currency, amount, user));
+    }
+
+    public static boolean removeBalance(@NotNull UUID playerId, @NotNull Currency currency, @NotNull BigDecimal amount) {
+        return editBalance(playerId, CoinsEngineAPI::getUserData, user -> CurrencyOperations.forRemoveSilently(currency, amount.doubleValue(), user));
+    }
+
+    public static void removeBalance(@NotNull Player player, @NotNull Currency currency, @NotNull BigDecimal amount) {
+        editBalance(player, CoinsEngineAPI::getUserData, user -> CurrencyOperations.forRemoveSilently(currency, amount.doubleValue(), user));
     }
 
     private static <T> boolean editBalance(@NotNull T nameOrId, @NotNull Function<T, CoinsUser> supplier, @NotNull Function<CoinsUser, CurrencyOperation> function) {

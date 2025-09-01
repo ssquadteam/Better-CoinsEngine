@@ -4,6 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import su.nightexpress.coinsengine.api.CoinsEngineAPI;
 import su.nightexpress.coinsengine.api.currency.Currency;
 
+import java.math.BigDecimal;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -59,12 +60,21 @@ public class UserBalance {
         return this.get(currency) >= amount;
     }
 
+    public boolean has(@NotNull Currency currency, @NotNull BigDecimal amount) {
+        return BigDecimal.valueOf(this.get(currency)).compareTo(amount) >= 0;
+    }
+
     public double get(@NotNull Currency currency) {
         return this.get(currency.getId());
     }
 
     public double get(@NotNull String currencyId) {
-        return this.balanceMap.getOrDefault(currencyId, 0D);
+        return this.balanceMap.getOrDefault(currencyId.toLowerCase(), 0D);
+    }
+
+    @NotNull
+    public BigDecimal getAsBigDecimal(@NotNull Currency currency) {
+        return BigDecimal.valueOf(this.get(currency));
     }
 
     public void add(@NotNull Currency currency, double amount) {
@@ -72,7 +82,17 @@ public class UserBalance {
     }
 
     public void add(@NotNull String currencyId, double amount) {
-        this.set(currencyId, this.get(currencyId) + Math.abs(amount));
+        String key = currencyId.toLowerCase();
+        double delta = Math.abs(amount);
+        this.balanceMap.compute(key, (k, oldValue) -> (oldValue == null ? 0D : oldValue) + delta);
+    }
+
+    public void add(@NotNull Currency currency, @NotNull BigDecimal amount) {
+        this.add(currency.getId(), amount.doubleValue());
+    }
+
+    public void add(@NotNull String currencyId, @NotNull BigDecimal amount) {
+        this.add(currencyId, amount.doubleValue());
     }
 
     public void remove(@NotNull Currency currency, double amount) {
@@ -80,7 +100,17 @@ public class UserBalance {
     }
 
     public void remove(@NotNull String currencyId, double amount) {
-        this.set(currencyId, this.get(currencyId) - Math.abs(amount));
+        String key = currencyId.toLowerCase();
+        double delta = Math.abs(amount);
+        this.balanceMap.compute(key, (k, oldValue) -> (oldValue == null ? 0D : oldValue) - delta);
+    }
+
+    public void remove(@NotNull Currency currency, @NotNull BigDecimal amount) {
+        this.remove(currency.getId(), amount.doubleValue());
+    }
+
+    public void remove(@NotNull String currencyId, @NotNull BigDecimal amount) {
+        this.remove(currencyId, amount.doubleValue());
     }
 
     public void set(@NotNull Currency currency, double amount) {
@@ -89,5 +119,13 @@ public class UserBalance {
 
     public void set(@NotNull String currencyId, double amount) {
         this.balanceMap.put(currencyId.toLowerCase(), amount);
+    }
+
+    public void set(@NotNull Currency currency, @NotNull BigDecimal amount) {
+        this.set(currency.getId(), currency.floorAndLimit(amount).doubleValue());
+    }
+
+    public void set(@NotNull String currencyId, @NotNull BigDecimal amount) {
+        this.set(currencyId, amount.doubleValue());
     }
 }

@@ -11,6 +11,8 @@ import su.nightexpress.nightcore.util.bukkit.NightItem;
 import su.nightexpress.nightcore.util.number.CompactNumber;
 import su.nightexpress.nightcore.util.placeholder.Replacer;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
@@ -37,12 +39,25 @@ public interface Currency {
 
     boolean isUnderLimit(double value);
 
+    default boolean isUnderLimit(@NotNull BigDecimal value) {
+        return this.isUnderLimit(value.doubleValue());
+    }
+
     @Deprecated
     default double fine(double amount) {
         return this.floorIfNeeded(amount);
     }
 
     double floorIfNeeded(double amount);
+
+    @NotNull
+    default BigDecimal floorIfNeeded(@NotNull BigDecimal amount) {
+        BigDecimal nonNegative = amount.max(BigDecimal.ZERO);
+        if (!this.isDecimal()) {
+            return nonNegative.setScale(0, RoundingMode.FLOOR);
+        }
+        return nonNegative;
+    }
 
     @Deprecated
     default double limit(double amount) {
@@ -51,6 +66,15 @@ public interface Currency {
 
     double limitIfNeeded(double amount);
 
+    @NotNull
+    default BigDecimal limitIfNeeded(@NotNull BigDecimal amount) {
+        if (this.isLimited()) {
+            double max = this.getMaxValue();
+            return amount.min(BigDecimal.valueOf(max));
+        }
+        return amount;
+    }
+
     @Deprecated
     default double fineAndLimit(double amount) {
         return this.floorAndLimit(amount);
@@ -58,11 +82,26 @@ public interface Currency {
 
     double floorAndLimit(double amount);
 
+    @NotNull
+    default BigDecimal floorAndLimit(@NotNull BigDecimal amount) {
+        return this.floorIfNeeded(this.limitIfNeeded(amount));
+    }
+
     @NotNull String getPermission();
 
     @NotNull String formatValue(double balance);
 
+    @NotNull
+    default String formatValue(@NotNull BigDecimal balance) {
+        return this.formatValue(balance.doubleValue());
+    }
+
     @NotNull String format(double balance);
+
+    @NotNull
+    default String format(@NotNull BigDecimal balance) {
+        return this.format(balance.doubleValue());
+    }
 
     @NotNull
     @Deprecated
@@ -72,7 +111,17 @@ public interface Currency {
 
     @NotNull CompactNumber compacted(double balance);
 
+    @NotNull
+    default CompactNumber compacted(@NotNull BigDecimal balance) {
+        return this.compacted(balance.doubleValue());
+    }
+
     @NotNull String formatCompact(double balance);
+
+    @NotNull
+    default String formatCompact(@NotNull BigDecimal balance) {
+        return this.formatCompact(balance.doubleValue());
+    }
 
     @NotNull String getId();
 
@@ -159,6 +208,12 @@ public interface Currency {
     boolean canExchangeTo(@NotNull Currency other);
 
     double getExchangeResult(@NotNull Currency other, double amount);
+
+    @NotNull
+    default BigDecimal getExchangeResult(@NotNull Currency other, @NotNull BigDecimal amount) {
+        double result = this.getExchangeResult(other, amount.doubleValue());
+        return BigDecimal.valueOf(result);
+    }
 
     boolean isLeaderboardEnabled();
 }

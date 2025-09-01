@@ -9,6 +9,7 @@ import su.nightexpress.coinsengine.user.BalanceLookup;
 import su.nightexpress.coinsengine.user.UserBalance;
 import su.nightexpress.nightcore.db.AbstractUser;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -91,6 +92,10 @@ public class CoinsUser extends AbstractUser {
         return this.balance.has(currency, amount);
     }
 
+    public boolean hasEnough(@NotNull Currency currency, @NotNull BigDecimal amount) {
+        return this.balance.has(currency, amount);
+    }
+
     public double getBalance(@NotNull Currency currency) {
         return this.balance.get(currency);
     }
@@ -99,11 +104,23 @@ public class CoinsUser extends AbstractUser {
         this.editBalance(currency, lookup -> lookup.add(amount));
     }
 
+    public void addBalance(@NotNull Currency currency, @NotNull BigDecimal amount) {
+        this.editBalance(currency, lookup -> lookup.add(amount));
+    }
+
     public void removeBalance(@NotNull Currency currency, double amount) {
         this.editBalance(currency, lookup -> lookup.remove(amount));
     }
 
+    public void removeBalance(@NotNull Currency currency, @NotNull BigDecimal amount) {
+        this.editBalance(currency, lookup -> lookup.remove(amount));
+    }
+
     public void setBalance(@NotNull Currency currency, double amount) {
+        this.editBalance(currency, lookup -> lookup.set(amount));
+    }
+
+    public void setBalance(@NotNull Currency currency, @NotNull BigDecimal amount) {
         this.editBalance(currency, lookup -> lookup.set(amount));
     }
 
