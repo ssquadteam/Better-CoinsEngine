@@ -18,6 +18,7 @@ import su.nightexpress.nightcore.command.experimental.impl.ReloadCommand;
 import su.nightexpress.nightcore.command.experimental.node.ChainedNode;
 import su.nightexpress.nightcore.command.experimental.node.DirectNode;
 import su.nightexpress.nightcore.util.Lists;
+import java.util.stream.IntStream;
 
 public class BasicCommands {
 
@@ -54,6 +55,14 @@ public class BasicCommands {
                 .description(Lang.COMMAND_WALLET_DESC)
                 .permission(Perms.COMMAND_WALLET)
                 .withArgument(ArgumentTypes.playerName(CommandArguments.PLAYER).permission(Perms.COMMAND_WALLET_OTHERS))
+                .withArgument(ArgumentTypes.integerAbs(CommandArguments.PAGE)
+                    .localized(Lang.COMMAND_ARGUMENT_NAME_PAGE)
+                    .withSamples(context -> IntStream.range(1, 11).boxed().map(String::valueOf).toList())
+                )
+                .withArgument(ArgumentTypes.integerAbs(CommandArguments.LIMIT)
+                    .localized(Lang.COMMAND_ARGUMENT_NAME_LIMIT)
+                    .withSamples(context -> Lists.newList("5", "10", "15", "20"))
+                )
                 .executes((context, arguments) -> showWallet(plugin, context, arguments))
             );
             plugin.getCommandManager().registerCommand(command);
@@ -70,7 +79,9 @@ public class BasicCommands {
 
     private static boolean showWallet(@NotNull CoinsEnginePlugin plugin, @NotNull CommandContext context, @NotNull ParsedArguments arguments) {
         String name = arguments.getStringArgument(CommandArguments.PLAYER, context.getSender().getName());
-        plugin.getCurrencyManager().showWallet(context.getSender(), name);
+        int page = arguments.getIntArgument(CommandArguments.PAGE, 1);
+        int limit = arguments.getIntArgument(CommandArguments.LIMIT, Config.WALLET_ENTRIES_PER_PAGE.get());
+        plugin.getCurrencyManager().showWallet(context.getSender(), name, page, limit);
         return true;
     }
 

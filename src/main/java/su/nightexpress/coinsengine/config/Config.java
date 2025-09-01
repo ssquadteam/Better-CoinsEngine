@@ -67,6 +67,11 @@ public class Config {
         "Command aliases for the Wallet feature."
     );
 
+    public static final ConfigValue<Integer> WALLET_ENTRIES_PER_PAGE = ConfigValue.create("Wallet.Entries_Per_Page",
+        10,
+        "Sets how many currencies to show per page for /wallet.")
+    ;
+
     public static final ConfigValue<Boolean> MIGRATION_ENABLED = ConfigValue.create("Migration.Enabled",
         true,
         "Controls whether Migration feature is available.",

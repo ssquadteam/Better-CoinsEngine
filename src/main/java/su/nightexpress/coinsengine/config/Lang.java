@@ -12,6 +12,7 @@ public class Lang extends CoreLang {
 
     public static final LangString COMMAND_ARGUMENT_NAME_CURRENCY = LangString.of("Command.Argument.Name.Currency", "currency");
     public static final LangString COMMAND_ARGUMENT_NAME_PAGE     = LangString.of("Command.Argument.Name.Page", "page");
+    public static final LangString COMMAND_ARGUMENT_NAME_LIMIT    = LangString.of("Command.Argument.Name.Limit", "limit");
     public static final LangString COMMAND_ARGUMENT_NAME_PLUGIN   = LangString.of("Command.Argument.Name.Plugin", "plugin");
     public static final LangString COMMAND_ARGUMENT_NAME_SYMBOL   = LangString.of("Command.Argument.Name.Symbol", "symbol");
     public static final LangString COMMAND_ARGUMENT_NAME_DECIMAL   = LangString.of("Command.Argument.Name.Decimals", "allowDecimals");
@@ -247,6 +248,8 @@ public class Lang extends CoreLang {
         GRAY.wrap("[" + GREEN.wrap("$") + "] Your Wallet:"),
         " ",
         GENERIC_ENTRY,
+        " ",
+        GENERIC_PREVIOUS_PAGE + "  " + GRAY.wrap("Page " + WHITE.wrap(GENERIC_CURRENT) + DARK_GRAY.wrap("/") + WHITE.wrap(GENERIC_MAX)) + "  " + GENERIC_NEXT_PAGE,
         DARK_GRAY.wrap(STRIKETHROUGH.wrap("-".repeat(32)))
     );
 
@@ -256,11 +259,39 @@ public class Lang extends CoreLang {
         GRAY.wrap("[" + GREEN.wrap("$") + "] " + WHITE.wrap(PLAYER_NAME) + "'s Wallet:"),
         " ",
         GENERIC_ENTRY,
+        " ",
+        GENERIC_PREVIOUS_PAGE + "  " + GRAY.wrap("Page " + WHITE.wrap(GENERIC_CURRENT) + DARK_GRAY.wrap("/") + WHITE.wrap(GENERIC_MAX)) + "  " + GENERIC_NEXT_PAGE,
         DARK_GRAY.wrap(STRIKETHROUGH.wrap("-".repeat(32)))
     );
 
     public static final LangString CURRENCY_WALLET_ENTRY = LangString.of("Currency.Wallet.Entry",
         YELLOW.wrap("•") + " " + WHITE.wrap(CURRENCY_NAME + ":") + " " + GREEN.wrap(GENERIC_BALANCE)
+    );
+
+    public static final LangString WALLET_LIST_NEXT_PAGE_ACTIVE = LangString.of("WalletList.NextPage.Active",
+        HOVER.wrapShowText(
+            CLICK.wrapRunCommand(
+                GREEN.wrap("[→]"), "/wallet " + GENERIC_VALUE + " " + GENERIC_AMOUNT
+            ),
+            GRAY.wrap("Click to get to the next page.")
+        )
+    );
+
+    public static final LangString WALLET_LIST_NEXT_PAGE_INACTIVE = LangString.of("WalletList.NextPage.Inactive",
+        HOVER.wrapShowText(GRAY.wrap("[→]"), GRAY.wrap("There are no more pages."))
+    );
+
+    public static final LangString WALLET_LIST_PREVIOUS_PAGE_ACTIVE = LangString.of("WalletList.PreviousPage.Active",
+        HOVER.wrapShowText(
+            CLICK.wrapRunCommand(
+                GREEN.wrap("[←]"), "/wallet " + GENERIC_VALUE + " " + GENERIC_AMOUNT
+            ),
+            GRAY.wrap("Click to get to the previous page.")
+        )
+    );
+
+    public static final LangString WALLET_LIST_PREVIOUS_PAGE_INACTIVE = LangString.of("WalletList.PreviousPage.Inactive",
+        HOVER.wrapShowText(GRAY.wrap("[←]"), GRAY.wrap("There are no more pages."))
     );
 
 

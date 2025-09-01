@@ -355,6 +355,10 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
     }
 
     public void showWallet(@NotNull CommandSender sender, @NotNull String name) {
+        this.showWallet(sender, name, 1, Config.WALLET_ENTRIES_PER_PAGE.get());
+    }
+
+    public void showWallet(@NotNull CommandSender sender, @NotNull String name, int page, int limit) {
         boolean isOwn = sender.getName().equalsIgnoreCase(name);
 
         this.plugin.getUserManager().manageUser(name, user -> {
@@ -363,18 +367,45 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
                 return;
             }
 
+            List<Currency> allowed = this.getCurrencies().stream()
+                .filter(currency -> !(sender instanceof Player p) || currency.hasPermission(p))
+                .sorted(Comparator.comparing(Currency::getId))
+                .toList();
+
+            final int pageSize = limit <= 0 ? Config.WALLET_ENTRIES_PER_PAGE.get() : limit;
+            int total = allowed.size();
+            int maxPage = Math.max(1, (int) Math.ceil(total / (double) pageSize));
+            int safePage = Math.max(1, Math.min(page, maxPage));
+            int fromIndex = Math.max(0, (safePage - 1) * pageSize);
+            int toIndex = Math.min(total, fromIndex + pageSize);
+
+            String previous = Replacer.create()
+                .replace(Placeholders.PLAYER_NAME, user.getName())
+                .replace(Placeholders.GENERIC_VALUE, safePage - 1)
+                .replace(Placeholders.GENERIC_AMOUNT, pageSize)
+                .apply((safePage > 1 ? Lang.WALLET_LIST_PREVIOUS_PAGE_ACTIVE : Lang.WALLET_LIST_PREVIOUS_PAGE_INACTIVE).getString());
+
+            String next = Replacer.create()
+                .replace(Placeholders.PLAYER_NAME, user.getName())
+                .replace(Placeholders.GENERIC_VALUE, safePage + 1)
+                .replace(Placeholders.GENERIC_AMOUNT, pageSize)
+                .apply((safePage < maxPage ? Lang.WALLET_LIST_NEXT_PAGE_ACTIVE : Lang.WALLET_LIST_NEXT_PAGE_INACTIVE).getString());
+
             (isOwn ? Lang.CURRENCY_WALLET_OWN : Lang.CURRENCY_WALLET_OTHERS).getMessage().send(sender, replacer -> replacer
                 .replace(Placeholders.GENERIC_ENTRY, list -> {
-                    this.getCurrencies().stream().sorted(Comparator.comparing(Currency::getId)).forEach(currency -> {
-                        if (sender instanceof Player player && !currency.hasPermission(player)) return;
-
+                    for (int i = fromIndex; i < toIndex; i++) {
+                        Currency currency = allowed.get(i);
                         list.add(Replacer.create()
                             .replace(currency.replacePlaceholders())
                             .replace(Placeholders.GENERIC_BALANCE, currency.format(user.getBalance(currency)))
                             .apply(Lang.CURRENCY_WALLET_ENTRY.getString())
                         );
-                    });
+                    }
                 })
+                .replace(Placeholders.GENERIC_PREVIOUS_PAGE, previous)
+                .replace(Placeholders.GENERIC_NEXT_PAGE, next)
+                .replace(Placeholders.GENERIC_CURRENT, safePage)
+                .replace(Placeholders.GENERIC_MAX, maxPage)
                 .replace(Placeholders.PLAYER_NAME, user.getName())
             );
         });
