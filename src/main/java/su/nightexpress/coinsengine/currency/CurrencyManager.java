@@ -320,7 +320,7 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
     public void showBalance(@NotNull CommandSender sender, @NotNull String name, @NotNull Currency currency) {
         boolean isOwn = sender.getName().equalsIgnoreCase(name);
 
-        plugin.getUserManager().manageUser(name, user -> {
+        plugin.getUserManager().manageOrAutoCreateUser(name, user -> {
             if (user == null) {
                 this.plugin.getRedisSyncManager().ifPresent(redis ->
                     redis.requestUserCreation(name, redis.getNodeId())
@@ -361,7 +361,7 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
     public void showWallet(@NotNull CommandSender sender, @NotNull String name, int page, int limit) {
         boolean isOwn = sender.getName().equalsIgnoreCase(name);
 
-        this.plugin.getUserManager().manageUser(name, user -> {
+        this.plugin.getUserManager().manageOrAutoCreateUser(name, user -> {
             if (user == null) {
                 Lang.ERROR_INVALID_PLAYER.getMessage(this.plugin).send(sender);
                 return;
@@ -418,7 +418,7 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
     public void togglePayments(@NotNull CommandSender sender, @NotNull String name, @NotNull Currency currency, boolean silent) {
         boolean isOwn = sender.getName().equalsIgnoreCase(name);
 
-        this.plugin.getUserManager().manageUser(name, user -> {
+        this.plugin.getUserManager().manageOrAutoCreateUser(name, user -> {
             if (user == null) {
                 this.plugin.getRedisSyncManager().ifPresent(redis ->
                     redis.requestUserCreation(name, redis.getNodeId())
@@ -493,7 +493,7 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
             return false;
         }
 
-        this.plugin.getUserManager().manageUser(targetName, targetUser -> {
+        this.plugin.getUserManager().manageOrAutoCreateUser(targetName, targetUser -> {
             if (targetUser == null) {
                 this.plugin.getRedisSyncManager().ifPresent(redis ->
                     redis.requestUserCreation(targetName, redis.getNodeId())

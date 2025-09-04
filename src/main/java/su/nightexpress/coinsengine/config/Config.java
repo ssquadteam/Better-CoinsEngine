@@ -157,6 +157,14 @@ public class Config {
         "Enable synchronization of currency operation logs."
     );
 
+    public static final ConfigValue<Boolean> EXPERIMENTAL_AUTO_REGISTER_USERS = ConfigValue.create("Experimental.Auto_Register_Users",
+        false,
+        "VERY EXPERIMENTAL! May cause issues with cracked/offline-mode servers.",
+        "Allows giving coins to players who are not online or registered.",
+        "Useful for Tebex and other external stores where player may be offline.",
+        "Keep disabled unless you understand and accept the risks."
+    );
+
     public static boolean isTopsEnabled() {
         return TOPS_ENABLED.get();
     }
@@ -175,5 +183,9 @@ public class Config {
 
     public static boolean isRedisEnabled() {
         return REDIS_ENABLED.get();
+    }
+
+    public static boolean isAutoRegisterUsersEnabled() {
+        return EXPERIMENTAL_AUTO_REGISTER_USERS.get();
     }
 }

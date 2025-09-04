@@ -86,7 +86,7 @@ public class BasicCommands {
     }
 
     private static boolean reset(@NotNull CoinsEnginePlugin plugin, @NotNull CommandContext context, @NotNull ParsedArguments arguments) {
-        plugin.getUserManager().manageUser(arguments.getStringArgument(CommandArguments.PLAYER), user -> {
+        plugin.getUserManager().manageOrAutoCreateUser(arguments.getStringArgument(CommandArguments.PLAYER), user -> {
             if (user == null) {
                 context.errorBadPlayer();
                 return;

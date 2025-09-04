@@ -337,14 +337,14 @@ public class CurrencyCommands {
 
         String playerName = arguments.getStringArgument(CommandArguments.PLAYER);
 
-        plugin.getUserManager().manageUser(playerName, user -> {
+        plugin.getUserManager().manageOrAutoCreateUser(playerName, user -> {
             if (user == null) {
                 plugin.getRedisSyncManager().ifPresent(redis ->
                     redis.requestUserCreation(playerName, redis.getNodeId())
                 );
 
                 plugin.getFoliaScheduler().runLater(() -> {
-                    plugin.getUserManager().manageUser(playerName, retryUser -> {
+                    plugin.getUserManager().manageOrAutoCreateUser(playerName, retryUser -> {
                         if (retryUser == null) {
                             context.errorBadPlayer();
                             return;

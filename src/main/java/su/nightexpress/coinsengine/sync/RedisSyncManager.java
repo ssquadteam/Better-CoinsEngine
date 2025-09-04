@@ -587,6 +587,16 @@ public class RedisSyncManager {
                 CoinsUser user = this.plugin.getUserManager().getOrFetch(player);
                 publishUserBalance(user);
                 this.plugin.info("Sent user data for cross-server request: " + playerName);
+                return;
+            }
+
+            if (Config.isAutoRegisterUsersEnabled()) {
+                this.plugin.getUserManager().manageOrAutoCreateUser(playerName, created -> {
+                    if (created != null) {
+                        publishUserBalance(created);
+                        this.plugin.info("Auto-registered user for cross-server request: " + playerName);
+                    }
+                });
             }
         });
     }
