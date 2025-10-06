@@ -5,7 +5,7 @@ plugins {
 }
 
 group = 'su.nightexpress.coinsengine'
-version = '2.5.9'
+version = '2.6.0'
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
@@ -45,13 +45,13 @@ dependencies {
     compileOnly 'me.clip:placeholderapi:2.11.6'
     compileOnly 'org.black_ixx:playerpoints:3.0.0'
     compileOnly 'com.github.ItzSave:DeluxeCoinflipAPI:1.0.4'
-    compileOnly name: 'nightcore-2.7.20', version: "2.7.20"
+    compileOnly name: 'nightcore-2.8.6', version: "2.8.6"
     compileOnly name: 'VaultUnlockedAPI-2.15'
 }
 
 processResources {
     filteringCharset = 'UTF-8'
-    filesMatching('plugin.yml') {
+    filesMatching(['plugin.yml', 'paper-plugin.yml']) {
         expand(project.properties)
     }
 }
