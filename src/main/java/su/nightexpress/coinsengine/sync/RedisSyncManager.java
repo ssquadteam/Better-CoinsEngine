@@ -203,7 +203,19 @@ public class RedisSyncManager {
 
         JsonObject data = new JsonObject();
         data.addProperty("currencyId", currencyId);
-        data.add("entries", gson.toJsonTree(entries));
+
+        // Serialize to a plain JSON object to avoid sending CachedProfile/NightProfile
+        JsonObject entriesObj = new JsonObject();
+        for (Map.Entry<String, TopEntry> e : entries.entrySet()) {
+            TopEntry te = e.getValue();
+            JsonObject obj = new JsonObject();
+            obj.addProperty("position", te.getPosition());
+            obj.addProperty("name", te.getName());
+            obj.addProperty("playerId", te.getPlayerId().toString());
+            obj.addProperty("balance", te.getBalance());
+            entriesObj.add(e.getKey(), obj);
+        }
+        data.add("entries", entriesObj);
         data.addProperty("timestamp", System.currentTimeMillis());
 
         publish("LEADERBOARD_UPDATE", data);
@@ -506,8 +518,16 @@ public class RedisSyncManager {
         if (!this.plugin.getTopManager().isPresent()) return;
 
         String currencyId = data.get("currencyId").getAsString();
-        Map<String, TopEntry> entries = gson.fromJson(data.get("entries"),
-            new com.google.gson.reflect.TypeToken<Map<String, TopEntry>>(){}.getType());
+        JsonObject entriesJson = data.getAsJsonObject("entries");
+        Map<String, TopEntry> entries = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, com.google.gson.JsonElement> member : entriesJson.entrySet()) {
+            JsonObject obj = member.getValue().getAsJsonObject();
+            int position = obj.get("position").getAsInt();
+            String name = obj.get("name").getAsString();
+            java.util.UUID playerId = java.util.UUID.fromString(obj.get("playerId").getAsString());
+            double balance = obj.get("balance").getAsDouble();
+            entries.put(member.getKey(), new TopEntry(position, name, playerId, balance));
+        }
 
         this.plugin.runNextTick(() -> {
             this.plugin.getTopManager().ifPresent(topManager -> {
