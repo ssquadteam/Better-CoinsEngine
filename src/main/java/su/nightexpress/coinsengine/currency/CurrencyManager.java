@@ -236,6 +236,11 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
 
         OperationResult result = operation.perform();
 
+        // Update snapshot cache with the latest balances immediately after operation
+        var user = operation.getUser();
+        var currency = operation.getCurrency();
+        this.plugin.getSnapshotCache().setBalance(user.getId(), currency.getId(), user.getBalance(currency));
+
         if (operation.isLoggable()) {
             if (Config.LOGS_TO_CONSOLE.get()) {
                 this.plugin.info(result.getLog());
@@ -253,10 +258,10 @@ public class CurrencyManager extends AbstractManager<CoinsEnginePlugin> {
             return false;
         }
 
-        this.plugin.getUserManager().save(operation.getUser());
+        this.plugin.getUserManager().save(user);
 
         this.plugin.getRedisSyncManager().ifPresent(redis -> {
-            redis.publishUserBalance(operation.getUser());
+            redis.publishUserBalance(user);
         });
 
         return true;

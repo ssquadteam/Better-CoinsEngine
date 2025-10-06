@@ -52,7 +52,13 @@ public class DeluxeCoinflipHook {
 
         @Nullable
         private CoinsUser getUser(@NotNull OfflinePlayer offlinePlayer) {
-            return this.plugin.getUserManager().getOrFetch(offlinePlayer.getUniqueId());
+            // Prefer loaded user to avoid main-thread DB access
+            CoinsUser loaded = this.plugin.getUserManager().getLoaded(offlinePlayer.getUniqueId());
+            if (loaded != null) return loaded;
+            if (!org.bukkit.Bukkit.isPrimaryThread()) {
+                return this.plugin.getUserManager().getOrFetch(offlinePlayer.getUniqueId());
+            }
+            return null;
         }
 
         @Override

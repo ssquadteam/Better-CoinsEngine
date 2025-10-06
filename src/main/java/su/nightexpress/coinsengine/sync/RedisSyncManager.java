@@ -425,25 +425,30 @@ public class RedisSyncManager {
         JsonObject balances = data.getAsJsonObject("balances");
         JsonObject settings = data.getAsJsonObject("settings");
 
-        this.plugin.runNextTick(() -> {
-            CoinsUser user = this.plugin.getUserManager().getOrFetch(userId);
-            if (user == null) {
-                user = this.plugin.getUserManager().getOrFetch(userId);
-                if (user == null) return;
+        // Update snapshot immediately to keep non-blocking reads consistent
+        java.util.Map<String, Double> snapshotMap = new java.util.HashMap<>();
+        for (Currency currency : this.plugin.getCurrencyManager().getCurrencies()) {
+            if (balances.has(currency.getId())) {
+                snapshotMap.put(currency.getId(), balances.get(currency.getId()).getAsDouble());
             }
+        }
+        this.plugin.getSnapshotCache().setBalances(userId, snapshotMap);
 
-            for (Currency currency : this.plugin.getCurrencyManager().getCurrencies()) {
-                if (balances.has(currency.getId())) {
-                    double balance = balances.get(currency.getId()).getAsDouble();
-                    user.getBalance().set(currency, balance); // Bypass balance event call
+        // Fetch user off-thread, then apply to main thread to avoid blocking
+        this.plugin.getUserManager().getOrFetchAsync(userId).thenAccept(user -> {
+            if (user == null) return;
+            this.plugin.runNextTick(() -> {
+                for (Currency currency : this.plugin.getCurrencyManager().getCurrencies()) {
+                    if (balances.has(currency.getId())) {
+                        double balance = balances.get(currency.getId()).getAsDouble();
+                        user.getBalance().set(currency, balance); // Bypass balance event call
+                    }
                 }
-            }
-
-            if (settings.has("hiddenFromTops")) {
-                user.setHiddenFromTops(settings.get("hiddenFromTops").getAsBoolean());
-            }
-
-            this.plugin.getUserManager().save(user);
+                if (settings.has("hiddenFromTops")) {
+                    user.setHiddenFromTops(settings.get("hiddenFromTops").getAsBoolean());
+                }
+                this.plugin.getUserManager().save(user);
+            });
         });
     }
 

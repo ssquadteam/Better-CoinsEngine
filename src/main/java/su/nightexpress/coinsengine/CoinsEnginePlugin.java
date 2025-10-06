@@ -31,6 +31,7 @@ public class CoinsEnginePlugin extends NightPlugin implements ImprovedCommands {
     private TopManager       topManager;
     private MigrationManager migrationManager;
     private RedisSyncManager redisSyncManager;
+    private su.nightexpress.coinsengine.data.BalanceSnapshotCache snapshotCache;
 
     @Override
     public void enable() {
@@ -41,6 +42,8 @@ public class CoinsEnginePlugin extends NightPlugin implements ImprovedCommands {
 
         this.userManager = new UserManager(this, this.dataHandler);
         this.userManager.setup();
+
+        this.snapshotCache = new su.nightexpress.coinsengine.data.BalanceSnapshotCache();
 
         this.currencyManager = new CurrencyManager(this);
         this.currencyManager.setup();
@@ -127,5 +130,10 @@ public class CoinsEnginePlugin extends NightPlugin implements ImprovedCommands {
     @NotNull
     public Optional<RedisSyncManager> getRedisSyncManager() {
         return Optional.ofNullable(this.redisSyncManager);
+    }
+
+    @NotNull
+    public su.nightexpress.coinsengine.data.BalanceSnapshotCache getSnapshotCache() {
+        return this.snapshotCache;
     }
 }

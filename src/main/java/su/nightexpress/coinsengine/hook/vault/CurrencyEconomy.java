@@ -89,10 +89,22 @@ public class CurrencyEconomy implements Economy {
         return this.getBalance(player);
     }
 
+    private @Nullable CoinsUser getUserFast(@NotNull OfflinePlayer player) {
+        // Prefer loaded user; do not block the main thread
+        CoinsUser loaded = this.plugin.getUserManager().getLoaded(player.getUniqueId());
+        if (loaded != null) return loaded;
+        if (!org.bukkit.Bukkit.isPrimaryThread()) {
+            return this.plugin.getUserManager().getOrFetch(player.getUniqueId());
+        }
+        return null;
+    }
+
     @Override
     public double getBalance(OfflinePlayer player) {
-        CoinsUser user = this.plugin.getUserManager().getOrFetch(player.getUniqueId());
-        return this.getBalance(user);
+        CoinsUser user = getUserFast(player);
+        if (user != null) return this.getBalance(user);
+        // Fallback to snapshot to avoid blocking
+        return this.plugin.getSnapshotCache().getBalance(player.getUniqueId(), this.currency.getId());
     }
 
     @Override
@@ -141,8 +153,11 @@ public class CurrencyEconomy implements Economy {
 
     @Override
     public boolean has(OfflinePlayer player, double amount) {
-        CoinsUser user = this.plugin.getUserManager().getOrFetch(player.getUniqueId());
-        return this.has(user, amount);
+        CoinsUser user = getUserFast(player);
+        if (user != null) return this.has(user, amount);
+        // Snapshot check
+        double bal = this.plugin.getSnapshotCache().getBalance(player.getUniqueId(), this.currency.getId());
+        return bal >= amount;
     }
 
     @Override
@@ -157,7 +172,8 @@ public class CurrencyEconomy implements Economy {
     }
 
     private boolean has(@Nullable CoinsUser user, double amount) {
-        return user != null && user.hasEnough(this.currency, amount);
+        if (user != null) return user.hasEnough(this.currency, amount);
+        return false;
     }
 
 
@@ -169,8 +185,17 @@ public class CurrencyEconomy implements Economy {
 
     @Override
     public EconomyResponse depositPlayer(OfflinePlayer player, double amount) {
-        CoinsUser user = this.plugin.getUserManager().getOrFetch(player.getUniqueId());
-        return this.depositUser(user, amount);
+        CoinsUser user = getUserFast(player);
+        if (user != null) {
+            return this.depositUser(user, amount);
+        }
+        // Queue async operation to avoid blocking; respond immediately with predicted balance
+        double before = this.plugin.getSnapshotCache().getBalance(player.getUniqueId(), this.currency.getId());
+        this.plugin.getUserManager().getOrFetchAsync(player.getUniqueId()).thenAccept(u -> {
+            if (u != null) this.manager.performOperation(CurrencyOperations.forAddSilently(this.currency, amount, u));
+        });
+        double predicted = before + amount;
+        return new EconomyResponse(amount, predicted, EconomyResponse.ResponseType.SUCCESS, null);
     }
 
     @Override
@@ -207,8 +232,20 @@ public class CurrencyEconomy implements Economy {
 
     @Override
     public EconomyResponse withdrawPlayer(OfflinePlayer player, double amount) {
-        CoinsUser user = this.plugin.getUserManager().getOrFetch(player.getUniqueId());
-        return this.withdrawUser(user, amount);
+        CoinsUser user = getUserFast(player);
+        if (user != null) {
+            return this.withdrawUser(user, amount);
+        }
+        // Snapshot-based pre-check and queued operation
+        double before = this.plugin.getSnapshotCache().getBalance(player.getUniqueId(), this.currency.getId());
+        if (before < amount) {
+            return new EconomyResponse(amount, before, EconomyResponse.ResponseType.FAILURE, Lang.ECONOMY_ERROR_INSUFFICIENT_FUNDS.getLegacy());
+        }
+        this.plugin.getUserManager().getOrFetchAsync(player.getUniqueId()).thenAccept(u -> {
+            if (u != null) this.manager.performOperation(CurrencyOperations.forRemoveSilently(this.currency, amount, u));
+        });
+        double predicted = before - amount;
+        return new EconomyResponse(amount, predicted, EconomyResponse.ResponseType.SUCCESS, null);
     }
 
     @Override
