@@ -185,8 +185,6 @@ public class PlaceholderAPIHook {
             }
 
             if (player != null) {
-                CoinsUser user = plugin.getUserManager().getOrFetch(player);
-
                 for (var entry : this.playerPlaceholders.entrySet()) {
                     String key = entry.getKey() + "_";
                     if (!params.startsWith(key)) continue;
@@ -194,6 +192,13 @@ public class PlaceholderAPIHook {
                     String currencyId = params.substring(key.length());
                     Currency currency = plugin.getCurrencyManager().getCurrency(currencyId);
                     if (currency == null) continue;
+
+                    CoinsUser user = plugin.getUserManager().getLoaded(player.getUniqueId());
+                    if (user == null) {
+                        double snap = plugin.getSnapshotCache().getBalance(player.getUniqueId(), currency.getId());
+                        user = CoinsUser.create(player.getUniqueId(), player.getName());
+                        user.getBalance().set(currency, snap);
+                    }
 
                     return entry.getValue().produce(player, user, currency);
                 }
