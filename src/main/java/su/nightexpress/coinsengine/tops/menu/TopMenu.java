@@ -26,7 +26,7 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 import static su.nightexpress.coinsengine.Placeholders.*;
-import static su.nightexpress.nightcore.util.text.tag.Tags.*;
+import static su.nightexpress.nightcore.util.text.night.wrapper.TagWrappers.*;
 
 public class TopMenu extends LinkedMenu<CoinsEnginePlugin, Currency> implements Filled<TopEntry>, ConfigBased {
 
@@ -40,6 +40,8 @@ public class TopMenu extends LinkedMenu<CoinsEnginePlugin, Currency> implements 
         super(plugin, MenuType.GENERIC_9X5, BLACK.wrap("Balance Top - " + CURRENCY_NAME));
         this.topManager = topManager;
     }
+
+    // TODO Limit to 10 entries only.
 
     @Override
     @NotNull
@@ -55,7 +57,7 @@ public class TopMenu extends LinkedMenu<CoinsEnginePlugin, Currency> implements 
                     .hideAllComponents()
                     .setDisplayName(this.entryName)
                     .setLore(this.entryLore)
-                    .setPlayerProfile(entry.getProfile())
+                    .setPlayerProfile(entry.getProfile().query())
                     .replacement(replacer -> replacer
                         .replace(GENERIC_POS, entry.getPosition())
                         .replace(PLAYER_NAME, entry.getName())

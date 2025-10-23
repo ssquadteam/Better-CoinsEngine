@@ -1,21 +1,15 @@
 package su.nightexpress.coinsengine.command;
 
 import org.jetbrains.annotations.NotNull;
-import su.nightexpress.coinsengine.CoinsEnginePlugin;
 import su.nightexpress.coinsengine.api.currency.Currency;
 import su.nightexpress.coinsengine.config.Lang;
-import su.nightexpress.nightcore.command.experimental.argument.ArgumentTypes;
-import su.nightexpress.nightcore.command.experimental.argument.CommandArgument;
-import su.nightexpress.nightcore.command.experimental.builder.ArgumentBuilder;
+import su.nightexpress.coinsengine.currency.CurrencyRegistry;
+import su.nightexpress.nightcore.commands.Arguments;
+import su.nightexpress.nightcore.commands.Commands;
+import su.nightexpress.nightcore.commands.builder.ArgumentNodeBuilder;
+import su.nightexpress.nightcore.commands.exceptions.CommandSyntaxException;
+import su.nightexpress.nightcore.core.config.CoreLang;
 import su.nightexpress.nightcore.util.Lists;
-import su.nightexpress.nightcore.util.Players;
-
-import java.util.ArrayList;
-import java.util.List;
-import su.nightexpress.nightcore.util.Players;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class CommandArguments {
 
@@ -25,40 +19,34 @@ public class CommandArguments {
     public static final String NAME     = "name";
     public static final String SYMBOL   = "symbol";
     public static final String DECIMALS = "decimals";
-    public static final String PAGE     = "page";
-    public static final String LIMIT    = "limit";
+
+    public static final String FLAG_SILENT          = "s";
+    public static final String FLAG_SILENT_FEEDBACK = "sf";
 
     @NotNull
-    public static ArgumentBuilder<Currency> currency(@NotNull CoinsEnginePlugin plugin) {
-        return CommandArgument.builder(CURRENCY, (string, context) -> plugin.getCurrencyManager().getCurrency(string))
+    public static ArgumentNodeBuilder<Currency> currency(@NotNull CurrencyRegistry registry) {
+        return Commands.argument(CURRENCY, (context, string) -> registry.byId(string).orElseThrow(() -> CommandSyntaxException.custom(Lang.COMMAND_SYNTAX_INVALID_CURRENCY)))
             .localized(Lang.COMMAND_ARGUMENT_NAME_CURRENCY)
-            .customFailure(Lang.ERROR_COMMAND_ARGUMENT_INVALID_CURRENCY)
-            .withSamples(context -> plugin.getCurrencyManager().getCurrencyIds())
-            ;
+            .suggestions((reader, context) -> registry.getCurrencyIds());
     }
 
     @NotNull
-    public static ArgumentBuilder<Double> amount() {
-        return ArgumentTypes.decimalCompactAbs(AMOUNT)
-            .localized(Lang.COMMAND_ARGUMENT_NAME_AMOUNT)
-            .withSamples(context -> Lists.newList("1", "10", "100", "500"))
-            ;
+    public static ArgumentNodeBuilder<Double> amount() {
+        return Arguments.decimalCompact(AMOUNT)
+            .localized(CoreLang.COMMAND_ARGUMENT_NAME_AMOUNT)
+            .suggestions((reader, context) -> Lists.newList("1", "10", "100", "500"));
     }
 
     @NotNull
-    public static ArgumentBuilder<String> crossServerPlayerName(@NotNull CoinsEnginePlugin plugin) {
-        return CommandArgument.builder(PLAYER, ArgumentTypes.STRING)
-            .localized(Lang.COMMAND_ARGUMENT_NAME_PLAYER)
-            .withSamples(context -> {
-                List<String> names = new ArrayList<>();
-                if (context.getPlayer() != null) {
-                    names.addAll(Players.playerNames(context.getPlayer()));
-                } else {
-                    names.addAll(Players.playerNames());
-                }
-                plugin.getRedisSyncManager().ifPresent(redis -> {
-                    names.addAll(redis.getAllPlayerNames());
-                });
+    public static su.nightexpress.nightcore.commands.builder.ArgumentNodeBuilder<String> crossServerPlayerName(@NotNull su.nightexpress.coinsengine.CoinsEnginePlugin plugin) {
+        return Arguments.playerName(PLAYER)
+            .localized(CoreLang.COMMAND_ARGUMENT_NAME_PLAYER)
+            .suggestions((reader, context) -> {
+                java.util.List<String> names = new java.util.ArrayList<>();
+                org.bukkit.entity.Player sender = context.getPlayer();
+                if (sender != null) names.addAll(su.nightexpress.nightcore.util.Players.playerNames(sender));
+                names.addAll(su.nightexpress.nightcore.util.Players.playerNames());
+                plugin.getRedisSyncManager().ifPresent(redis -> names.addAll(redis.getAllPlayerNames()));
                 return names.stream().distinct().sorted().toList();
             });
     }

@@ -5,6 +5,8 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.jetbrains.annotations.NotNull;
+import su.nightexpress.coinsengine.config.Lang;
+import su.nightexpress.coinsengine.Placeholders;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import su.nightexpress.nightcore.lib.redis.jedis.DefaultJedisClientConfig;
@@ -439,7 +441,7 @@ public class RedisSyncManager {
 
         // Update snapshot immediately to keep non-blocking reads consistent
         java.util.Map<String, Double> snapshotMap = new java.util.HashMap<>();
-        for (Currency currency : this.plugin.getCurrencyManager().getCurrencies()) {
+        for (Currency currency : this.plugin.getCurrencyRegistry().getCurrencies()) {
             if (balances.has(currency.getId())) {
                 snapshotMap.put(currency.getId(), balances.get(currency.getId()).getAsDouble());
             }
@@ -450,7 +452,7 @@ public class RedisSyncManager {
         this.plugin.getUserManager().getOrFetchAsync(userId).thenAccept(user -> {
             if (user == null) return;
             this.plugin.runNextTick(() -> {
-                for (Currency currency : this.plugin.getCurrencyManager().getCurrencies()) {
+                for (Currency currency : this.plugin.getCurrencyRegistry().getCurrencies()) {
                     if (balances.has(currency.getId())) {
                         double balance = balances.get(currency.getId()).getAsDouble();
                         user.getBalance().set(currency, balance); // Bypass balance event call
@@ -475,7 +477,7 @@ public class RedisSyncManager {
             Player player = Bukkit.getPlayer(userId);
             if (player == null) return;
 
-            Currency currency = this.plugin.getCurrencyManager().getCurrency(currencyId);
+            Currency currency = this.plugin.getCurrencyRegistry().getById(currencyId);
             if (currency == null) return;
 
             switch (operation) {
@@ -504,7 +506,7 @@ public class RedisSyncManager {
                     boolean enabled = amount > 0;
                     currency.sendPrefixed(Lang.COMMAND_CURRENCY_PAYMENTS_TOGGLE, player, replacer -> replacer
                         .replace(currency.replacePlaceholders())
-                        .replace(Placeholders.GENERIC_STATE, Lang.getEnabledOrDisabled(enabled))
+                        .replace(Placeholders.GENERIC_STATE, su.nightexpress.nightcore.core.config.CoreLang.STATE_ENABLED_DISALBED.get(enabled))
                     );
                 }
             }
@@ -531,7 +533,7 @@ public class RedisSyncManager {
 
         this.plugin.runNextTick(() -> {
             this.plugin.getTopManager().ifPresent(topManager -> {
-                topManager.updateExternalTopEntries(currencyId, entries);
+                topManager.applyExternalTopEntries(currencyId, entries);
                 this.plugin.info("Updated leaderboard for currency: " + currencyId + " (" + entries.size() + " entries)");
             });
         });
@@ -543,7 +545,7 @@ public class RedisSyncManager {
         String logEntry = data.get("logEntry").getAsString();
 
         this.plugin.runTaskAsync(() -> {
-            this.plugin.getCurrencyManager().getLogger().addExternalLogEntry(logEntry);
+            this.plugin.info("External transaction log: " + logEntry);
         });
     }
 
@@ -558,7 +560,7 @@ public class RedisSyncManager {
             Player recipient = Bukkit.getPlayer(recipientId);
             if (recipient == null) return;
 
-            Currency currency = this.plugin.getCurrencyManager().getCurrency(currencyId);
+            su.nightexpress.coinsengine.api.currency.Currency currency = this.plugin.getCurrencyRegistry().getById(currencyId);
             if (currency == null) return;
 
             currency.sendPrefixed(Lang.CURRENCY_SEND_DONE_NOTIFY, recipient, replacer -> replacer
@@ -635,12 +637,10 @@ public class RedisSyncManager {
             }
 
             if (Config.isAutoRegisterUsersEnabled()) {
-                this.plugin.getUserManager().manageOrAutoCreateUser(playerName, created -> {
-                    if (created != null) {
-                        publishUserBalance(created);
-                        this.plugin.info("Auto-registered user for cross-server request: " + playerName);
-                    }
-                });
+                su.nightexpress.coinsengine.data.impl.CoinsUser created = this.plugin.getUserManager().getOrFetch(playerName);
+                if (created != null) {
+                    publishUserBalance(created);
+                }
             }
         });
     }

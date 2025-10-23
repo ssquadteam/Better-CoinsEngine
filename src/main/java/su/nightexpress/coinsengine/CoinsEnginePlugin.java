@@ -2,78 +2,91 @@ package su.nightexpress.coinsengine;
 
 import org.jetbrains.annotations.NotNull;
 import su.nightexpress.coinsengine.api.CoinsEngineAPI;
-import su.nightexpress.coinsengine.command.currency.CurrencyCommands;
-import su.nightexpress.coinsengine.command.impl.BasicCommands;
+import su.nightexpress.coinsengine.command.CommandManager;
 import su.nightexpress.coinsengine.config.Config;
 import su.nightexpress.coinsengine.config.Lang;
 import su.nightexpress.coinsengine.config.Perms;
 import su.nightexpress.coinsengine.currency.CurrencyManager;
+import su.nightexpress.coinsengine.currency.CurrencyRegistry;
 import su.nightexpress.coinsengine.data.DataHandler;
-import su.nightexpress.coinsengine.data.UserManager;
-import su.nightexpress.coinsengine.hook.DeluxeCoinflipHook;
-import su.nightexpress.coinsengine.hook.HookId;
-import su.nightexpress.coinsengine.hook.PlaceholderAPIHook;
+import su.nightexpress.coinsengine.hook.HookPlugin;
+import su.nightexpress.coinsengine.hook.impl.DeluxeCoinflipHook;
+import su.nightexpress.coinsengine.hook.impl.PlaceholderAPIHook;
 import su.nightexpress.coinsengine.migration.MigrationManager;
-import su.nightexpress.coinsengine.sync.RedisSyncManager;
 import su.nightexpress.coinsengine.tops.TopManager;
+import su.nightexpress.coinsengine.user.UserManager;
 import su.nightexpress.nightcore.NightPlugin;
-import su.nightexpress.nightcore.command.experimental.ImprovedCommands;
 import su.nightexpress.nightcore.config.PluginDetails;
 import su.nightexpress.nightcore.util.Plugins;
 
 import java.util.Optional;
 
-public class CoinsEnginePlugin extends NightPlugin implements ImprovedCommands {
+public class CoinsEnginePlugin extends NightPlugin {
 
     private DataHandler      dataHandler;
     private UserManager      userManager;
+    private CurrencyRegistry currencyRegistry;
     private CurrencyManager  currencyManager;
     private TopManager       topManager;
     private MigrationManager migrationManager;
-    private RedisSyncManager redisSyncManager;
+    private CommandManager   commandManager;
+
+    // Custom additions
+    private su.nightexpress.coinsengine.sync.RedisSyncManager redisSyncManager;
     private su.nightexpress.coinsengine.data.BalanceSnapshotCache snapshotCache;
 
     @Override
-    public void enable() {
-        this.loadEngine();
-        
-        this.dataHandler = new DataHandler(this);
-        this.dataHandler.setup();
+    protected void onStartup() {
+        super.onStartup();
+        CoinsEngineAPI.load(this);
+        this.currencyRegistry = new CurrencyRegistry();
+    }
 
-        this.userManager = new UserManager(this, this.dataHandler);
-        this.userManager.setup();
+    @Override
+    public void enable() {
+        this.dataHandler = new DataHandler(this);
+        this.userManager = new UserManager(this, this.currencyRegistry, this.dataHandler);
+        this.currencyManager = new CurrencyManager(this, this.currencyRegistry, this.dataHandler, this.userManager);
+        this.commandManager = new CommandManager(this, this.currencyRegistry, this.currencyManager);
 
         this.snapshotCache = new su.nightexpress.coinsengine.data.BalanceSnapshotCache();
 
-        this.currencyManager = new CurrencyManager(this);
+        this.dataHandler.setup();
+        this.userManager.setup();
         this.currencyManager.setup();
 
         if (Config.isTopsEnabled()) {
-            this.topManager = new TopManager(this);
+            this.topManager = new TopManager(this, this.currencyRegistry);
             this.topManager.setup();
         }
 
         if (Config.isMigrationEnabled()) {
-            this.migrationManager = new MigrationManager(this);
+            this.migrationManager = new MigrationManager(this, this.dataHandler, this.userManager, this.currencyRegistry, this.currencyManager);
             this.migrationManager.setup();
         }
+
+        this.commandManager.setup();
 
         if (Plugins.hasPlaceholderAPI()) {
             PlaceholderAPIHook.setup(this);
         }
 
-        if (Plugins.isInstalled(HookId.DELUXE_COINFLIP)) {
-            this.runNextTick(() -> DeluxeCoinflipHook.setup(this));
+        if (Plugins.isInstalled(HookPlugin.DELUXE_COINFLIP)) {
+            this.runTask(task -> DeluxeCoinflipHook.setup(this));
         }
 
-        this.redisSyncManager = new RedisSyncManager(this);
+        this.redisSyncManager = new su.nightexpress.coinsengine.sync.RedisSyncManager(this);
         this.redisSyncManager.setup();
     }
 
-    private void loadEngine() {
-        CoinsEngineAPI.load(this);
-        CurrencyCommands.load(this);
-        BasicCommands.load(this);
+    @Override
+    protected boolean disableCommandManager() {
+        return true;
+    }
+
+    @Override
+    protected void addRegistries() {
+        this.registerLang(Lang.class);
     }
 
     @Override
@@ -82,14 +95,19 @@ public class CoinsEnginePlugin extends NightPlugin implements ImprovedCommands {
             PlaceholderAPIHook.shutdown();
         }
 
-        if (this.redisSyncManager != null) this.redisSyncManager.shutdown();
+        if (this.commandManager != null) this.commandManager.shutdown();
         if (this.topManager != null) this.topManager.shutdown();
         if (this.migrationManager != null) this.migrationManager.shutdown();
         if (this.userManager != null) this.userManager.shutdown();
         if (this.dataHandler != null) this.dataHandler.shutdown();
         if (this.currencyManager != null) this.currencyManager.shutdown();
+        if (this.redisSyncManager != null) this.redisSyncManager.shutdown();
+    }
 
-        CurrencyCommands.clear();
+    @Override
+    protected void onShutdown() {
+        super.onShutdown();
+        this.currencyRegistry.removeAll();
         CoinsEngineAPI.clear();
     }
 
@@ -98,8 +116,17 @@ public class CoinsEnginePlugin extends NightPlugin implements ImprovedCommands {
     protected PluginDetails getDefaultDetails() {
         return PluginDetails.create("Economy", new String[]{"coinsengine", "coe"})
             .setConfigClass(Config.class)
-            .setLangClass(Lang.class)
             .setPermissionsClass(Perms.class);
+    }
+
+    @NotNull
+    public CommandManager getCommander() {
+        return this.commandManager;
+    }
+
+    @NotNull
+    public CurrencyRegistry getCurrencyRegistry() {
+        return this.currencyRegistry;
     }
 
     @NotNull
@@ -127,9 +154,10 @@ public class CoinsEnginePlugin extends NightPlugin implements ImprovedCommands {
         return this.userManager;
     }
 
+    // Custom getters
     @NotNull
-    public Optional<RedisSyncManager> getRedisSyncManager() {
-        return Optional.ofNullable(this.redisSyncManager);
+    public java.util.Optional<su.nightexpress.coinsengine.sync.RedisSyncManager> getRedisSyncManager() {
+        return java.util.Optional.ofNullable(this.redisSyncManager);
     }
 
     @NotNull

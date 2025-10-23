@@ -1,9 +1,11 @@
-name: CoinsEngine
-version: '${project.version}'
 main: su.nightexpress.coinsengine.CoinsEnginePlugin
-api-version: '1.21'
-folia-supported: true
+version: '${project.version}'
+name: CoinsEngine
+author: NightExpress
+desciption: Unlimited virtual currencies and server economy.
 load: STARTUP
+api-version: 1.21
+folia-supported: true
 dependencies:
   server:
     nightcore:
@@ -17,9 +19,3 @@ dependencies:
       required: false
     DeluxeCoinflip:
       required: false
-  bootstrap:
-    - name: nightcore
-      required: true
-description: Unlimited virtual currencies and server economy.
-authors:
-  - NightExpress
