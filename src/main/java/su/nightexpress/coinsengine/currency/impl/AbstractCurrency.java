@@ -7,6 +7,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import su.nightexpress.coinsengine.CoinsEnginePlugin;
 import su.nightexpress.coinsengine.Placeholders;
 import su.nightexpress.coinsengine.api.currency.Currency;
 import su.nightexpress.coinsengine.config.Config;
@@ -254,17 +255,18 @@ public abstract class AbstractCurrency implements Currency, ConfigBacked {
 
     @Override
     public void sendPrefixed(@NotNull MessageLocale locale, @NotNull CommandSender sender, @Nullable Consumer<Replacer> consumer) {
-        LangMessage message;
-        if (Config.CURRENCY_PREFIX_ENABLED.get()) {
-            message = locale.withPrefix(this.messagePrefix);
-        }
-        else {
-            message = locale.message();
-        }
+        CoinsEnginePlugin.getPlugin(CoinsEnginePlugin.class).getFoliaScheduler().runAsync(() -> {
+            LangMessage message;
+            if (Config.CURRENCY_PREFIX_ENABLED.get()) {
+                message = locale.withPrefix(this.messagePrefix);
+            } else {
+                message = locale.message();
+            }
 
-        message.send(sender, replacer -> {
-            replacer.replace(this.replacePlaceholders());
-            if (consumer != null) consumer.accept(replacer);
+            message.send(sender, replacer -> {
+                replacer.replace(this.replacePlaceholders());
+                if (consumer != null) consumer.accept(replacer);
+            });
         });
     }
 

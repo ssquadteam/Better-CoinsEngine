@@ -82,8 +82,10 @@ public class TopManager extends AbstractManager<CoinsEnginePlugin> {
     }
 
     public void hideFromTops(@NotNull Player player) {
-        CoinsUser user = this.plugin.getUserManager().getOrFetch(player);
-        user.setHiddenFromTops(player.hasPermission(Perms.HIDE_FROM_TOPS));
+        this.plugin.getFoliaScheduler().runAsync(() -> {
+            CoinsUser user = this.plugin.getUserManager().getOrFetch(player);
+            user.setHiddenFromTops(player.hasPermission(Perms.HIDE_FROM_TOPS));
+        });
     }
 
     public boolean showLeaderboard(@NotNull CommandSender sender, @NotNull Currency currency, int page) {
